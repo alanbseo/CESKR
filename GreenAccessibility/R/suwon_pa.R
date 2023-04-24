@@ -1,14 +1,15 @@
+library(dplyr)
 library(raster)
 library(sp)
 library(rgdal)
 library(readxl)
-#library(doParallel)
+# library(doParallel)
 
 path_data = "GreenAccessibility/R/R_input/"
 
 
 costd <- read.csv(paste0(path_data, "suwon_pa_0116_filter.csv"))
-str(costd)
+# str(costd)
 
 biotope <- read.csv(paste0(path_data, "/biotope_db2.csv"),fileEncoding = "euc-kr")
 
@@ -33,7 +34,7 @@ area[is.na(area)] <- 0
 
 
 n_row = nrow(cd_only)
- 
+n_col = 977 # ?
 # cost distance and the row ids
 
 # time consuming
@@ -52,7 +53,7 @@ n_row = nrow(cd_only)
 cd_only_plusoffset = cd_only[, 4:ncol(cd_only)] + cd_only[,3]
 
 cd_dist = cbind(cd_only[, 2:3 ], cd_only_plusoffset)
- 
+
 
 #Calculate population under 400m
 
@@ -69,7 +70,7 @@ cd_400 <- cd_dist
 # }
 
 cd_only_plusoffset_NAmarked = cd_only_plusoffset
-cd_only_plusoffset_NAmarked[is.na(cd_only_plusoffset_NAmarked)] = 500 # 500 m 
+cd_only_plusoffset_NAmarked[is.na(cd_only_plusoffset_NAmarked)] = 500 # minimum size 500 m (Vogt et al., 2015.. Voigt?)
 
 cd_400[,3:ncol(cd_400)] = cd_only_plusoffset_NAmarked
 
@@ -90,7 +91,7 @@ pop_400
 # 847330
 
 
-
+# Population
 pop_sum <- sum(cd_dist[,1])
 pop_400_percentage <- pop_400 / sum(cd_dist[,1]) * 100
 
@@ -113,99 +114,113 @@ i <- 1
 j <- 1
 #area_sum <- sum(area[,2])
 
-#recommended green space per capita
+#recommended green space per capita (20 m2)
 area_mean <- 20
 
-#all open space_400m
-for (j in 1:n_row){
-  for (i in 1:977){
-    if (is.na(cd_dist[j, i+2]) == FALSE & area[i,2] >= 5000){
-      if (cd_dist[j, i+2] == 0){
-        SWDF[j,i+2] <- 1 * area[i,2]
-      } else {
-        if (area[i,2] > 100000){
-          SWDF[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * 100000
-        } else {
-          SWDF[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * area[i,2]
-        }
-      }
-    }
-  }
-}
+#     #all open space_400m
+#     for (j in 1:n_row){
+#         cat(j)
+#         for (i in 1:977){
+#             
+#             # area >= 5000 
+#             if (is.na(cd_dist[j, i+2]) == FALSE & area[i,2] >= 5000){
+#                 
+#                 # dist == 0, then just the area
+#                 if (cd_dist[j, i+2] == 0){
+#                     SWDF[j,i+2] <- 1 * area[i,2]
+#                     
+#                     # dist > 0  
+#                 } else {
+#                     # area > 1E5
+#                     if (area[i,2] > 100000){
+#                         SWDF[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * 100000
+#                         
+#                         # area <= 1E5
+#                     } else {
+#                         SWDF[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * area[i,2]
+#                     }
+#                 }
+#             }
+#         }
+#     }
+# 
+# #forest & artificial green area
+# for (j in 1:n_row){
+#     for (i in 1:977){
+#         if (is.na(cd_dist[j, i+2] & area[i,2] >= 5000) == FALSE){
+#             if (biotope_df[i,2] == "산림지" | biotope_df[i,2] == "조경녹지"){
+#                 if (cd_dist[j, i+2] == 0){
+#                     SWDF_fa[j,i+2] <- 1 * area[i,2]
+#                 } else {
+#                     if (area[i,2] > 100000){
+#                         SWDF_fa[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * 100000
+#                     } else {
+#                         SWDF_fa[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * area[i,2]
+#                     }
+#                 }
+#             } else {
+#                 SWDF_fa[j, i+2] <- 0
+#             }
+#         }
+#     }
+# }
+
+### Matrix calculation
+SWDF = matrix(0, nrow = n_row, ncol = n_col)
+
+# Create an area matrix. Replicate the area vector
+Area_matrix = rep(area$area, n = n_row) %>% matrix(nrow = n_col, ncol =  n_row) %>% t
 
 
+# mean spatial weight 
+msw = 0.05 # following usual alpha (5%)
+ers = 400 # effective range of service
+
+# 
+Area_corrected = Area_matrix
+# max effective area size (10 ha)
+Area_corrected[Area_matrix > 1E5 ] = 1E5
+ 
+# Spatial Weight
+SWDF = exp(cd_only_plusoffset * log(msw) / ers) * Area_corrected
 
 
+# Area >= 5000 and Dist == 0
+SWDF[Area_corrected==0 ] = Area_matrix[Area_corrected==0]
+
+# Area < 5 ha
+SWDF[Area_matrix < 1E5] = Area_matrix[Area_matrix < 1E5] # zero benefit 
 
 
+# Forest & artificial green area
+forest_idx = (biotope_df[i,2] == "산림지" | biotope_df[i,2] == "조경녹지")
 
-#forest & artificial green area
-for (j in 1:n_row){
-  for (i in 1:977){
-    if (is.na(cd_dist[j, i+2] & area[i,2] >= 5000) == FALSE){
-      if (biotope_df[i,2] == "?긲??" | biotope_df[i,2] == "��??????"){
-        if (cd_dist[j, i+2] == 0){
-          SWDF_fa[j,i+2] <- 1 * area[i,2]
-        } else {
-          if (area[i,2] > 100000){
-            SWDF_fa[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * 100000
-          } else {
-            SWDF_fa[j,i+2] <- exp(cd_dist[j,i+2] * log(0.05) / as.integer(biotope_order[i,3])) * area[i,2]
-          }
-        }
-      } else {
-        SWDF_fa[j, i+2] <- 0
-      }
-    }
-  }
-}
-
-
-
-pop <- costd[,2]
-LSDF <- data.frame(obj_id, LS, pop)
-LSDF_fa <- data.frame(obj_id, LS, pop)
-
+SWDF_fa = SWDF
+SWDF_fa[,!forest_idx] = 0 # mask all non-forest patches
 
 
 #NA data to 0
-for (j in 1:n_row){
-  for (i in 1:977){
-    if(is.na(SWDF[j,i+2]) == TRUE){
-      SWDF[j,i+2] = 0
-    }
-  }
-}
-
-for (j in 1:n_row){
-  for (i in 1:977){
-    if(is.na(SWDF_fa[j,i+2]) == TRUE){
-      SWDF_fa[j,i+2] = 0
-    }
-  }
-}
+SWDF[is.na(SWDF)] = 0
+SWDF_fa[is.na(SWDF_fa)] = 0
 
 
-
+ 
 #Level of Service Data Frame
-for (j in 1:n_row){
-  LSDF[j,2] <- (sum(SWDF[j,c(-1,-2)]) / area_mean) - costd[j,2]
-}
+LSDF = rowSums(SWDF) / area_mean - costd$TT_Pop 
+LSDF_fa = rowSums(SWDF_fa) / area_mean - costd$TT_Pop 
 
 
+ 
 
-
-for (j in 1:n_row  LS _fa[j,2] <- (sum(SWDF_fa[j,c(-1,-2)]) / area_mean) - costd[j,2]
-}
-
+LSDF_final <- data.frame(obj_id, LSDF, costd$TT_Pop )
+LSDF_fa_final <- data.frame(obj_id, LSDF_fa, costd$TT_Pop )
 
 
 
 
 #save csv file
-write.csv(LSDF, "./LSDF_Suwon_os_0208_400.csv_repl", row.names = F)
-
-write.csv(LSDF_fa, "./LSDF_Suwon_0208_fa_400.csv_repl", row.names = F)
+write.csv(LSDF_final, "./LSDF_Suwon_os_0208_400.csv_repl", row.names = F)
+write.csv(LSDF_fa_final, "./LSDF_Suwon_0208_fa_400.csv_repl", row.names = F)
 
 
 
