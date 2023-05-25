@@ -1,3 +1,4 @@
+library(data.table)
 library(doSNOW)
 library(openxlsx)
 library(readxl)
@@ -10,7 +11,18 @@ library(dplyr)
 
 
 path_data = "~/Dropbox/KIT/생태원/2023 과제/Data/"
+path_out = "~/Dropbox/KIT/생태원/2023 과제/tmp/"
 setwd(path_data)
+
+
+
+# LSMD 
+path_lsmd = "~/Dropbox/GIS Data/Korea/Admin/LSMD_ADMIN/"
+
+lsmd_seoul = readOGR(paste0(path_lsmd, "LSMD_ADM_SECT_UMD_11_Seoul/LSMD_ADM_SECT_UMD_11.shp"), use_iconv = TRUE, encoding = "EUC-KR") # 
+
+head(lsmd_seoul@data)
+
 
 
 survey_dt = read_xlsx("생태계서비스팀 공간정보/10. 생태계서비스/2. 생태계서비스 대국민 인식조사 설문결과.xlsx")
@@ -55,7 +67,7 @@ colnames(sggcode_dt) = c("Region_Code", "Region", "SGG_CodeShort", "SGG", "EMD_C
 
 
 # padding 
-sggcode_dt$SGG_CodeShort = formatC(as.numeric(sggcode_dt$SGG_CodeShort), width = 4, format = "d", flag = "0")
+sggcode_dt$SGG_CodeShort = formatC(as.numeric(sggcode_dt$SGG_CodeShort), width = 3, format = "d", flag = "0")
 
 sggcode_dt$SGG_Code = paste0(sggcode_dt$Region_Code, sggcode_dt$SGG_CodeShort )
 
@@ -185,21 +197,40 @@ survey_dt_new$SGG [survey_dt_new$SGG == "상서구" ] = "강서구"
 # table(survey_dt_new$SGG[!(survey_dt_new$SGG %in% admincode_dt$SGG)])
 
 
-# matching SGG code
-survey_dt_new2 = left_join(survey_dt_new, sggcode_dt[, c( "SGG_Code", "SGG")], by = c("SGG"), multiple = "first")
+# matching SGG code 
+
+sggcode_df_small = data.frame(sggcode_dt[, c( "SGG_Code", "Region", "SGG")])
+sggcode_df_small = sggcode_df_small[!duplicated(sggcode_df_small),]
+
+
+# first match region and then SGG
+survey_dt_new_merged = merge(data.frame(survey_dt_new[,]),y=sggcode_df_small,  by.x = c("Region", "SGG"), by.y = c("Region", "SGG"),  all.x=T, all.y = F)
  
-table(is.na(survey_dt_new2$SGG))
-table(survey_dt_new2$SGG=="")
+nrow(survey_dt_new_merged)
 
-survey_dt_new2_error = survey_dt_new2[survey_dt_new2$SGG =="",]
+  
+table(is.na(survey_dt_new_merged$SGG))
+table(survey_dt_new_merged$SGG=="")
 
-
-write.xlsx(survey_dt_new2_error, file = paste0("survey_dt_new_nodata", Sys.Date(), ".xlsx"))
-
-
+survey_dt_new_merged_error = survey_dt_new_merged[survey_dt_new_merged$SGG =="",]
 
 
+write.xlsx(survey_dt_new_merged_error, file = paste0(path_out, "survey_dt_new_nodata", Sys.Date(), ".xlsx"))
 
+
+write.xlsx(survey_dt_new_merged, file = paste0(path_out, "survey_dt_new_", Sys.Date(), ".xlsx"))
+
+# 
+
+table(is.na(survey_dt_new_merged$SGG_Code))
+
+
+table(survey_dt_new_merged$SGG_Code %in% sgg_shp$SIGUNGU_CD)
+table(survey_dt_new_merged$SGG_Code [!(survey_dt_new_merged$SGG_Code %in% sgg_shp$SIGUNGU_CD)])
+
+
+
+stop("ends here")
 
 
 
@@ -293,14 +324,6 @@ for (r_idx in seq_along(regioncode_new)) {
 }
 
 
-
-
-# LSMD 
-path_lsmd = "~/Dropbox/GIS Data/Korea/Admin/LSMD_ADMIN/"
-
-lsmd_seoul = readOGR(paste0(path_lsmd, "LSMD_ADM_SECT_UMD_11_Seoul/LSMD_ADM_SECT_UMD_11.shp"), use_iconv = TRUE, encoding = "EUC-KR") # 
-
-head(lsmd_seoul@data)
 
 
 

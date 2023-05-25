@@ -51,14 +51,14 @@ dataname = "SDG"
 # out_path_base = "/pd/data/crafty/FlickrEU_result/Tagging_EU2019_v3/"
 
 # Linux
-default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
-photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
-out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
+# default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
+# photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
+# out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
 
 # mac
-# default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
-# photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
-# out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
+default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
+photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/Photos_V2/'
+out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
 
 
 os.chdir(default_path)
@@ -66,7 +66,7 @@ os.chdir(default_path)
 out_path = out_path_base + modelname + "/" + dataname + "/"
 
 # number of images for one batch prediction
-prediction_batch_size = 32
+prediction_batch_size = 64
 
 top = 10  # print top-n classes
 

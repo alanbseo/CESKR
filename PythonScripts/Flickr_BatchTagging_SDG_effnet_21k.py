@@ -6,11 +6,6 @@ import pandas as pd
 
 
 
-
-# import tensorflow as tf
-# import keras
-
-# from keras.applications import inception_resnet_v2
 # from tensorflow.keras.applications import EfficientNetV2M as efficientnet_v2
 
 
@@ -21,7 +16,9 @@ import keras_efficientnet_v2
 
 from tensorflow.keras.preprocessing import image
 
-img_width, img_height = 512, 512
+img_width, img_height = 480, 480 # M and L
+# img_width, img_height = 512, 512 # XL
+
 
 import fnmatch
 
@@ -38,7 +35,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True  # read broken images
 toCopyFile = False
 
   
-modelname = "EfficientNetV2XL_21k"
+modelname = "EfficientNetV2L_21k"
 
 
 # SDG
@@ -53,14 +50,14 @@ dataname = "SDG"
 # out_path_base = "/pd/data/crafty/FlickrEU_result/Tagging_EU2019_v3/"
 
 # Linux
-default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
-photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
-out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
+# default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
+# photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos_V2/'
+# out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
 
 # mac
-# default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
-# photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
-# out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
+default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
+photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/Photos_V2/'
+out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
 
 
 os.chdir(default_path)
@@ -68,7 +65,7 @@ os.chdir(default_path)
 out_path = out_path_base + modelname + "/" + dataname + "/"
 
 # number of images for one batch prediction
-prediction_batch_size = 32
+prediction_batch_size = pow(2,7) # 2^8 = 256
 
 top = 10  # print top-n classes
 
@@ -134,17 +131,12 @@ model_trained = keras_efficientnet_v2.EfficientNetV2XL(pretrained="imagenet21k",
 )
 
 
-
-
-
-
 # list only folder names
 foldernames = [d for d in os.listdir(photo_path_base) if os.path.isdir(os.path.join(photo_path_base, d))]
 
 # f_idx = 1
 
-for f_idx in reversed(range(0, len(foldernames))):
-# for f_idx in (range(0, 1)):
+for f_idx in (range(0, len(foldernames))):
 
     foldername = foldernames[f_idx]
     print("folder idx:" + str(f_idx))
@@ -160,7 +152,7 @@ for f_idx in reversed(range(0, len(foldernames))):
         # csv output file
         name_csv = out_path + "Result/" + "/CSV/" + os.path.relpath(root, photo_path_base) + ".csv"
         if os.path.exists(name_csv):
-            print("skips as it is done already")
+            print("skips as it was done before")
             continue  # skip the folder if there is already the output csv file
 
 
@@ -176,7 +168,7 @@ for f_idx in reversed(range(0, len(foldernames))):
 
         n_files = len(filenames)
 
-        # print(filenames)
+        print(n_files)
 
 
         def foo_get_year(x):
