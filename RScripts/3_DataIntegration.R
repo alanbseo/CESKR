@@ -36,6 +36,8 @@ path_SDG_xls = "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/July2022_V1/Xlsx/"
 path_out_network =  "~/Dropbox/KIT/CES_SEOUL/CESKR/FlickrSDG_result/Network/"
 
 path_out_final =  "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_result/Final/"
+workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/"
+savedir <- "July2022_V1/"
 
 years = 2005:2022
 
@@ -170,7 +172,7 @@ inat_utm_sp$cmmn_nm_num = as.numeric(inat_utm_sp$cmmn_nm_fac)
 
 inat_total_r = rasterize(vect(inat_utm_sp), sdg_r_dummy_1km, fun = "sum",  na.rm=T)
 
-writeRaster(inat_total_r, filename = paste0("../FlickrSDG_result/iNaturalists/inat_total_count.tif"), overwrite=T)
+writeRaster(inat_total_r, filename = paste0("../FlickrSDG_result/Final/iNaturalists/inat_total_count.tif"), overwrite=T)
 
 
 
@@ -191,7 +193,7 @@ foreach(taxa_tmp = taxa_names) %do% {
     inat_tmp_r = rasterize(vect(inat_tmp), sdg_r_dummy_1km, fun = "sum",  na.rm=T)
     
     
-    writeRaster(inat_tmp_r, filename = paste0("../FlickrSDG_result/iNaturalists/inat_", taxa_tmp, "_count.tif"), overwrite=T)
+    writeRaster(inat_tmp_r, filename = paste0("../FlickrSDG_result/Final/iNaturalists/inat_", taxa_tmp, "_count.tif"), overwrite=T)
     
     
 }
@@ -280,7 +282,7 @@ tb_group2 = sort(round(tb_group / sum(tb_group) * 100, 2), F)
 
 inat_df = foreach(taxa_tmp = taxa_names, .combine = "cbind") %do% {
     
-    inat_tmp_r = raster(paste0("../FlickrSDG_result/iNaturalists/inat_", taxa_tmp, "_count.tif"))
+    inat_tmp_r = rast(paste0("../FlickrSDG_result/Final/iNaturalists/inat_", taxa_tmp, "_count.tif"))
     
     inat_tmp_v = values(inat_tmp_r)[mcst_idx]
     # plot(mcst_total_v[mcst_idx], inat_tmp_v[mcst_idx])
@@ -300,7 +302,7 @@ int_df[is.na(int_df)] = 0
 
 inat_annual_df = foreach(taxa_tmp = taxa_names, .combine = "cbind") %do% {
     foreach(taxa_tmp = taxa_names, .combine = "cbind") %do% {
-        inat_tmp_r = raster(paste0("../FlickrSDG_result/iNaturalists/inat_", taxa_tmp, "_count.tif"))
+        inat_tmp_r = rast(paste0("../FlickrSDG_result/Final/iNaturalists/inat_", taxa_tmp, "_count.tif"))
         
         inat_tmp_v = values(inat_tmp_r)[mcst_idx]
         # plot(mcst_total_v[mcst_idx], inat_tmp_v[mcst_idx])
@@ -336,7 +338,7 @@ c1[c1>0.5]
 tb3 = data.frame(round(c1[-c(1:3),1:3], 2))
 rownames(tb3)
 
-write.xlsx(tb3, file = "../FlickrSDG_result/iNaturalists/MCST_iNat_Spearman.xlsx")
+write.xlsx(tb3, file = "../FlickrSDG_result/Final/iNaturalists/MCST_iNat_Spearman.xlsx")
 
 
 
@@ -349,13 +351,13 @@ dev.off()
 
 inat_df = foreach(taxa_tmp = taxa_names, .combine = "cbind") %do% {
     
-    inat_tmp_r = raster(paste0("../FlickrSDG_result/iNaturalists/inat_", taxa_tmp, "_count.tif"))
+    inat_tmp_r = rast(paste0("../FlickrSDG_result/Final/iNaturalists/inat_", taxa_tmp, "_count.tif"))
     
     inat_tmp_v = values(inat_tmp_r)[mcst_idx]
     
     inat_tmp_v[is.na(inat_tmp_v)] = 0
     
-    plot(mcst_total_v[mcst_idx], inat_tmp_v)
+    # plot(mcst_total_v[mcst_idx], inat_tmp_v)
     
     return(inat_tmp_v)
 }

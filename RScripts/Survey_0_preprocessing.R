@@ -11,25 +11,27 @@ library(dplyr)
 
 
 path_data = "~/Dropbox/KIT/생태원/2023 과제/Data/"
-path_out = "~/Dropbox/KIT/생태원/2023 과제/tmp/"
+path_out = "~/Dropbox/KIT/생태원/2023 과제/tmp/"
 setwd(path_data)
 
 
-
-# LSMD 
-path_lsmd = "~/Dropbox/GIS Data/Korea/Admin/LSMD_ADMIN/"
-
-lsmd_seoul = readOGR(paste0(path_lsmd, "LSMD_ADM_SECT_UMD_11_Seoul/LSMD_ADM_SECT_UMD_11.shp"), use_iconv = TRUE, encoding = "EUC-KR") # 
-
-head(lsmd_seoul@data)
+path_gis= "~/Dropbox/GIS Data/Korea/"
 
 
+# # LSMD 
+# path_lsmd = "~/Dropbox/GIS Data/Korea/Admin/LSMD_ADMIN/"
+# 
+# lsmd_seoul = readOGR(paste0(path_lsmd, "LSMD_ADM_SECT_UMD_11_Seoul/LSMD_ADM_SECT_UMD_11.shp"), use_iconv = TRUE, encoding = "EUC-KR") # 
+# 
+# head(lsmd_seoul@data)
 
-survey_dt = read_xlsx("생태계서비스팀 공간정보/10. 생태계서비스/2. 생태계서비스 대국민 인식조사 설문결과.xlsx")
+
+
+survey_dt = read_xlsx("생태계서비스팀 공간정보/10. 생태계서비스/2. 생태계서비스 대국민 인식조사 설문결과_19May2023수정.xlsx")
 
 survey_dt = survey_dt[!is.na(survey_dt$No),]
 
-n_cols = 59 
+n_cols = 60 
 survey_dt = survey_dt[, 1:n_cols]
 colnames(survey_dt)[56] = "Gender"
 colnames(survey_dt)[57] = "Age"
@@ -45,10 +47,34 @@ table(survey_dt$TX3_2)
 
 table(survey_dt$TX3_3_RE)
 
+# survey_dt$TX3_3_RE = NULL
+survey_dt$TX3_3_RE = survey_dt$TX3_3_RE2
+survey_dt$TX3_3_RE2 = NULL
+
+
+
+
+
+
 ### 시군구
 
-filepath_SGG = "생태계서비스팀 공간정보/01. 각종 경계모음/통계청_행정구역(2022)/시군구행정경계_전국.shp"
-sgg_shp = readOGR(filepath_SGG, use_iconv = TRUE, encoding = "EUC-KR") #
+# filepath_SGG = "생태계서비스팀 공간정보/01. 각종 경계모음/통계청_행정구역(2022)/시군구행정경계_전국.shp"
+# sgg_shp = readOGR(filepath_SGG, use_iconv = TRUE, encoding = "EUC-KR") #
+
+# http://www.gisdeveloper.co.kr/?p=2332
+# 법정동 기반 시군구
+filepath_SGG2 = "~/Dropbox/GIS Data/Korea/Admin/SIG_202302/sig.shp"
+sgg_shp = readOGR(filepath_SGG2, use_iconv = TRUE, encoding = "EUC-KR") #
+
+# 법정동 기반 시군구 단위
+sgg_bjd_df = read_xlsx(paste0(path_gis, "Admin/법정동 기준 시군구 단위.xlsx"),4)
+
+
+stopifnot(all(sgg_shp$SIGUNGU_CD %in% sgg_bjd_df$SGG_CODE))
+
+table(survey_dt$TX3_3_RE %in% sgg_bjd_df$SGGwithRegion)
+survey_dt$TX3_3_RE[!(survey_dt$TX3_3_RE %in% sgg_bjd_df$SGGwithRegion)]
+
 
 
 ### 법정동 
@@ -59,28 +85,28 @@ colnames(admincode_dt)
 colnames(admincode_dt) = c("Region", "SGG", "HJD_Kor", "HJD_2nd", "BJD", "HJD_Code", "HJD_2nd_Code", "HJD_Date", "BJD_Code", "BJD_Area", "HJD_Eng", "Note")
 
 # SGIS 행정구역코드
-filepath_sggcode = "~/Dropbox/GIS Data/Korea/Admin/adm_code.xls"
-sggcode_dt = read_xls(filepath_sggcode, sheet = 1, skip = 1) # first sheet
-head(sggcode_dt)
-colnames(sggcode_dt)
-colnames(sggcode_dt) = c("Region_Code", "Region", "SGG_CodeShort", "SGG", "EMD_Code", "EMD")
-
-
-# padding 
-sggcode_dt$SGG_CodeShort = formatC(as.numeric(sggcode_dt$SGG_CodeShort), width = 3, format = "d", flag = "0")
-
-sggcode_dt$SGG_Code = paste0(sggcode_dt$Region_Code, sggcode_dt$SGG_CodeShort )
+# filepath_sggcode = "~/Dropbox/GIS Data/Korea/Admin/adm_code.xls"
+# sggcode_dt = read_xls(filepath_sggcode, sheet = 1, skip = 1) # first sheet
+# head(sggcode_dt)
+# colnames(sggcode_dt)
+# colnames(sggcode_dt) = c("Region_Code", "Region", "SGG_CodeShort", "SGG", "EMD_Code", "EMD")
+# 
+# 
+# # padding 
+# sggcode_dt$SGG_CodeShort = formatC(as.numeric(sggcode_dt$SGG_CodeShort), width = 3, format = "d", flag = "0")
+# 
+# sggcode_dt$SGG_Code = paste0(sggcode_dt$Region_Code, sggcode_dt$SGG_CodeShort )
 
 
 ### read admin boundary shp 
 
-filepath_emd = "~/Dropbox/GIS Data/Korea/Admin/EMD_202302/emd.shp"
-emd = readOGR(filepath_emd, use_iconv = TRUE, encoding = "EUC-KR") #
-# # emd$EMD_CD
-# # (emd$EMD_KOR_NM)
-
-filepath_lard = "~/Dropbox/GIS Data/Korea/Admin/LARD_ADMIN/"
-list.dirs(filepath_lard, recursive = F)
+# filepath_emd = "~/Dropbox/GIS Data/Korea/Admin/EMD_202302/emd.shp"
+# emd = readOGR(filepath_emd, use_iconv = TRUE, encoding = "EUC-KR") #
+# # # emd$EMD_CD
+# # # (emd$EMD_KOR_NM)
+# 
+# filepath_lard = "~/Dropbox/GIS Data/Korea/Admin/LARD_ADMIN/"
+# list.dirs(filepath_lard, recursive = F)
 
 # lard_seoul = readOGR(paste0(filepath_lard, "LARD_ADM_SECT_SGG_11_Seoul/LARD_ADM_SECT_SGG_11.shp"), use_iconv = TRUE, encoding = "EUC-KR") # 
 # 
@@ -101,6 +127,7 @@ list.dirs(filepath_lard, recursive = F)
 # Kormaps::korpopmap1
 
 survey_province = sapply(survey_dt$TX3_3_RE, FUN = function(x) strsplit(x, " ")[[1]][1])
+
 
 # matches well?
 tb1 = table(survey_dt$Q1, survey_province)
@@ -175,8 +202,15 @@ TX3_3_spl = foreach (tx3_3 = survey_dt$TX3_3_RE, .combine = "rbind") %do% {
     spl = strsplit(tx3_3, " ")[[1]]
     if (length(spl) == 1) {
         spl = c(spl, "")   
-    } else { 
+    } else if (length(spl) == 2) {
         # do nothing
+        
+    } else if (length(spl) == 3) {
+        spl = c(spl[1], paste(spl[2], spl[3])   )
+        
+    } else {
+        stop("shouln't be more than three elements")
+        
     }
     
     return(spl)
@@ -185,6 +219,9 @@ TX3_3_spl = foreach (tx3_3 = survey_dt$TX3_3_RE, .combine = "rbind") %do% {
 colnames(TX3_3_spl) = c("Region", "SGG")
 
 survey_dt_new = cbind(survey_dt, TX3_3_spl)
+
+
+
 
 # 원자료 오타 수정
 survey_dt_new$SGG [survey_dt_new$SGG == "동장구" ] = "동작구"
@@ -199,35 +236,101 @@ survey_dt_new$SGG [survey_dt_new$SGG == "상서구" ] = "강서구"
 
 # matching SGG code 
 
-sggcode_df_small = data.frame(sggcode_dt[, c( "SGG_Code", "Region", "SGG")])
-sggcode_df_small = sggcode_df_small[!duplicated(sggcode_df_small),]
+# sggcode_df_small = data.frame(sggcode_dt[, c( "SGG_Code", "Region", "SGG")])
+# sggcode_df_small = sggcode_df_small[!duplicated(sggcode_df_small),]
+
 
 
 # first match region and then SGG
-survey_dt_new_merged = merge(data.frame(survey_dt_new[,]),y=sggcode_df_small,  by.x = c("Region", "SGG"), by.y = c("Region", "SGG"),  all.x=T, all.y = F)
- 
+# survey_dt_new_merged = merge(data.frame(survey_dt_new[,]),y=sggcode_df_small,  by.x = c("Region", "SGG"), by.y = c("Region", "SGG"),  all.x=T, all.y = F)
+
+
+survey_dt_new_merged = merge(data.frame(survey_dt_new[,]),y=sgg_bjd_df[,c("SGGwithRegion", "SGG_CODE")],  by.x = c("TX3_3_RE"), by.y = c("SGGwithRegion"), all.x=T, all.y = F)
+
+
 nrow(survey_dt_new_merged)
 
-  
-table(is.na(survey_dt_new_merged$SGG))
-table(survey_dt_new_merged$SGG=="")
 
-survey_dt_new_merged_error = survey_dt_new_merged[survey_dt_new_merged$SGG =="",]
+table(sapply(survey_dt_new_merged$TX3_3_RE, FUN = function(x) strsplit(x, " ")[[1]] %>% length))
+
+
+table(is.na(survey_dt_new_merged$SGG_CODE))
+table(survey_dt_new_merged$SGG_CODE=="")
+
+survey_dt_new_merged_error = survey_dt_new_merged[(survey_dt_new_merged$SGG_CODE =="") | (survey_dt_new_merged$SGG_CODE %>% is.na),]
+
+
+nrow(survey_dt_new_merged_error)
+
+# a =table(survey_dt_new_merged_error$TX3_3_RE)
+# a
+# names(a)
+survey_dt_new_merged_error$TX3_3_RE
+# 26 
 
 
 write.xlsx(survey_dt_new_merged_error, file = paste0(path_out, "survey_dt_new_nodata", Sys.Date(), ".xlsx"))
 
 
+
+table(is.na(survey_dt_new_merged$SGG_CODE))
+
+
+table(survey_dt_new_merged$SGG_CODE %in% sgg_shp$SIG_CD)
+
+
+table(survey_dt_new_merged$SGG [!(survey_dt_new_merged$SGG_Code %in% sgg_shp$SIG_CD)])
+
+
+# (survey_dt_new_merged[!(survey_dt_new_merged$SGG_Code %in% sgg2_shp$SIGUNGU_CD), ])
+table(survey_dt_new_merged[!(survey_dt_new_merged$SGG_CODE %in% sgg_shp$SIG_CD), ]$TX3_3_RE)
+
+
+
+
 write.xlsx(survey_dt_new_merged, file = paste0(path_out, "survey_dt_new_", Sys.Date(), ".xlsx"))
 
-# 
-
-table(is.na(survey_dt_new_merged$SGG_Code))
 
 
-table(survey_dt_new_merged$SGG_Code %in% sgg_shp$SIGUNGU_CD)
-table(survey_dt_new_merged$SGG_Code [!(survey_dt_new_merged$SGG_Code %in% sgg_shp$SIGUNGU_CD)])
+library(sf)
 
+# Spatial merging
+q_idx = 1 
+col_cnt_v = paste0("Q", 15:35)
+
+
+res_dt_l = foreach (q_idx = seq_along(col_cnt_v)) %do% { 
+    col_nm_tmp = col_cnt_v[q_idx] 
+    
+    
+    # cat
+    
+    # res_tmp = tapply(survey_dt_new_merged[, col_nm_tmp], INDEX = survey_dt_new_merged$SGG_CODE, FUN = function(x) {r1 = table(factor(x, 1:5)); return(r1/sum(r1, na.rm=T))})
+    
+    # cont. 
+    res_tmp = tapply(survey_dt_new_merged[, col_nm_tmp], INDEX = survey_dt_new_merged$SGG_CODE, FUN = function(x) {c(mean(x, na.rm=T), sd(x, na.rm=T))})
+    
+    
+    res_df = do.call(rbind, res_tmp) %>% data.frame
+    res_df = cbind(rownames(res_df), res_df)
+    colnames(res_df) = c("SGG_CODE", "Mean", "SD")
+    
+    
+    dt1 = merge(sgg_shp@data, y = res_df, by.x = "SIG_CD", by.y = "SGG_CODE", all.x = TRUE)
+    
+    dt1 = dt1[,4:5]
+    colnames(dt1) = paste0(col_nm_tmp,"_", c("Avg", "SD"))
+    
+    return(dt1)
+}
+
+res_dt_df = do.call("cbind", res_dt_l)
+
+res_shp = sgg_shp
+
+res_shp@data = cbind(sgg_shp@data, res_dt_df)
+
+writeOGR(res_shp, paste0(path_out), layer = paste0("Survey_AvgSD_bySGG"), driver = "ESRI Shapefile", encoding = "EUC-KR", overwrite_layer = T)
 
 
 stop("ends here")
