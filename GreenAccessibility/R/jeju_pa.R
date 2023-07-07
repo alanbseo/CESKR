@@ -18,7 +18,14 @@ colnames(biotope)
 biotope_df = data.frame(biotope)
 
 
-biotope_df[,6] = 400
+THRESHOLD_DISTANCE = 400 # 400 m
+MIN_AREA_SIZE = 500 # 500 m
+#recommended green space per capita (20 m2)
+AREA_MIN <- 20
+
+
+
+biotope_df$Threshold = THRESHOLD_DISTANCE
 
 colnames(biotope_df)[3] = "area"
 colnames(biotope_df)[6] = "Threshold"
@@ -28,12 +35,14 @@ cd_only <- costd[, -c(3:4, 6:8)] # FID, Population, Near DIST, F1...
 
 colnames(cd_only)[1] <- 'ORIG_FID'
 
-biotope_order <- biotope_df[,c(1,3,6)]
+biotope_order <- biotope_df[,c("ORIG_FID","area","Threshold")]
 
 # FID and area size
-area <- biotope_order[,c(1,2)]
+area <- biotope_df[,c("ORIG_FID","area")]
 
 area[is.na(area)] <- 0
+
+
 
 
 
@@ -41,7 +50,7 @@ n_row = nrow(cd_only)
 n_col = ncol(cd_only) - 3 # 
 # cost distance and the row ids
 
-# time consuming
+# ... time consuming
 
 # cd_dist <- cd_only[,1:ncol(cd_only)]
 # cd_dist <- cd_dist[,-1] # Remove FID
@@ -54,9 +63,9 @@ n_col = ncol(cd_only) - 3 #
 # }
 
 # distance + near distance
-cd_only_plusoffset = cd_only[, 4:ncol(cd_only)] + cd_only[,3]
+cd_only_plusoffset = cd_only[, 4:ncol(cd_only)] + cd_only[,"NEAR_DIST"]
 
-cd_dist = cbind(cd_only[, 2:3 ], cd_only_plusoffset)
+cd_dist = cbind(cd_only[, c("Pop", "NEAR_DIST") ], cd_only_plusoffset)
 
 
 #Calculate population under 400m
@@ -74,7 +83,7 @@ cd_400 <- cd_dist
 # }
 
 cd_only_plusoffset_NAmarked = cd_only_plusoffset
-cd_only_plusoffset_NAmarked[is.na(cd_only_plusoffset_NAmarked)] = 500 # minimum size 500 m (Vogt et al., 2015.. Voigt?)
+cd_only_plusoffset_NAmarked[is.na(cd_only_plusoffset_NAmarked)] = MIN_AREA_SIZE # minimum size 500 m (Vogt et al., 2015.. Voigt?)
 
 cd_400[,3:ncol(cd_400)] = cd_only_plusoffset_NAmarked
 
@@ -87,10 +96,10 @@ cd_400[,3:ncol(cd_400)] = cd_only_plusoffset_NAmarked
 # }
 
 row_min_values = apply(cd_only_plusoffset_NAmarked, MARGIN = 2, FUN = min, na.rm=T)
-table(row_min_values <= 400)
+table(row_min_values <= THRESHOLD_DISTANCE)
 
 # sum all population closer to green area less or equal than 400 m 
-pop_400 = sum(cd_dist$TT_Pop[row_min_values <= 400], na.rm=T)
+pop_400 = sum(cd_dist$TT_Pop[row_min_values <= THRESHOLD_DISTANCE], na.rm=T)
 pop_400 
 # 847330
 
@@ -114,12 +123,11 @@ LS <- c(1:nrow(cd_dist))
 SWDF <- cd_dist
 SWDF_fa <- SWDF
 str(cd_dist)
-i <- 1
-j <- 1
+# i <- 1
+# j <- 1
 #area_sum <- sum(area[,2])
 
-#recommended green space per capita (20 m2)
-area_mean <- 20
+
 
 #     #all open space_400m
 #     for (j in 1:n_row){
@@ -197,7 +205,7 @@ SWDF[Area_matrix < 1E5] = Area_matrix[Area_matrix < 1E5] # zero benefit
 
 
 # Forest & artificial green area
-forest_idx = (biotope_df[i,2] == "산림지" | biotope_df[i,2] == "조경녹지")
+forest_idx = (biotope_df[,2] == "산림지" | biotope_df[,2] == "조경녹지")
 
 SWDF_fa = SWDF
 SWDF_fa[,!forest_idx] = 0 # mask all non-forest patches
@@ -210,8 +218,8 @@ SWDF_fa[is.na(SWDF_fa)] = 0
 
  
 #Level of Service Data Frame
-LSDF = rowSums(SWDF) / area_mean - costd$Pop 
-LSDF_fa = rowSums(SWDF_fa) / area_mean - costd$Pop 
+LSDF = rowSums(SWDF) / AREA_MIN - costd$Pop 
+LSDF_fa = rowSums(SWDF_fa) / AREA_MIN - costd$Pop 
 
 
  
@@ -223,8 +231,8 @@ LSDF_fa_final <- data.frame(obj_id, LSDF_fa, costd$Pop )
 
 
 #save csv file
-write.csv(LSDF_final, "./LSDF_Jeju_os_0707_400.csv", row.names = F)
-write.csv(LSDF_fa_final, "./LSDF_Jeju_0707_fa_400.csv", row.names = F)
+write.csv(LSDF_final, paste0("./LSDF_Jeju_os_0707_", THRESHOLD_DISTANCE, ".csv"), row.names = F)
+write.csv(LSDF_fa_final,paste0("./LSDF_Jeju_0707_fa_", THRESHOLD_DISTANCE, ".csv"), row.names = F)
 
 
 

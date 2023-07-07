@@ -110,8 +110,8 @@ LS <- c(1:nrow(cd_dist))
 SWDF <- cd_dist
 SWDF_fa <- SWDF
 str(cd_dist)
-i <- 1
-j <- 1
+# i <- 1
+# j <- 1
 #area_sum <- sum(area[,2])
 
 #recommended green space per capita (20 m2)
@@ -193,7 +193,7 @@ SWDF[Area_matrix < 1E5] = Area_matrix[Area_matrix < 1E5] # zero benefit
 
 
 # Forest & artificial green area
-forest_idx = (biotope_df[i,2] == "산림지" | biotope_df[i,2] == "조경녹지")
+forest_idx = (biotope_df[,2] == "산림지" | biotope_df[,2] == "조경녹지")
 
 SWDF_fa = SWDF
 SWDF_fa[,!forest_idx] = 0 # mask all non-forest patches
