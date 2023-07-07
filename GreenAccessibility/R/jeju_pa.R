@@ -8,16 +8,20 @@ library(readxl)
 path_data = "GreenAccessibility/R/R_input/"
 
 
-costd <- read.csv(paste0(path_data, "suwon_pa_0116_filter.csv"))
+costd <- read.csv(paste0(path_data, "1. cstd_jeju.csv"))
 # str(costd)
 
-biotope <- read.csv(paste0(path_data, "/biotope_db2.csv"),fileEncoding = "euc-kr")
-
-biotope_class <- c(1:977)
-biotope_df <- data.frame(biotope, biotope_class)
+biotope <- read.csv(paste0(path_data, "/2. biotope_jeju.csv"),fileEncoding = "euc-kr")
+colnames(biotope)
+# biotope_class <- c(1:977)
+# biotope_df <- data.frame(biotope, biotope_class) # necessary?
+biotope_df = data.frame(biotope)
 
 
 biotope_df[,6] = 400
+
+colnames(biotope_df)[3] = "area"
+colnames(biotope_df)[6] = "Threshold"
 
 cd_only <- costd[, -c(3:4, 6:8)] # FID, Population, Near DIST, F1...
 # str(cd_only)s
@@ -34,7 +38,7 @@ area[is.na(area)] <- 0
 
 
 n_row = nrow(cd_only)
-n_col = 977 # ?
+n_col = ncol(cd_only) - 3 # 
 # cost distance and the row ids
 
 # time consuming
@@ -206,21 +210,21 @@ SWDF_fa[is.na(SWDF_fa)] = 0
 
  
 #Level of Service Data Frame
-LSDF = rowSums(SWDF) / area_mean - costd$TT_Pop 
-LSDF_fa = rowSums(SWDF_fa) / area_mean - costd$TT_Pop 
+LSDF = rowSums(SWDF) / area_mean - costd$Pop 
+LSDF_fa = rowSums(SWDF_fa) / area_mean - costd$Pop 
 
 
  
 
-LSDF_final <- data.frame(obj_id, LSDF, costd$TT_Pop )
-LSDF_fa_final <- data.frame(obj_id, LSDF_fa, costd$TT_Pop )
+LSDF_final <- data.frame(obj_id, LSDF, costd$Pop )
+LSDF_fa_final <- data.frame(obj_id, LSDF_fa, costd$Pop )
 
 
 
 
 #save csv file
-write.csv(LSDF_final, "./LSDF_Suwon_os_0208_400.csv_repl", row.names = F)
-write.csv(LSDF_fa_final, "./LSDF_Suwon_0208_fa_400.csv_repl", row.names = F)
+write.csv(LSDF_final, "./LSDF_Jeju_os_0707_400.csv", row.names = F)
+write.csv(LSDF_fa_final, "./LSDF_Jeju_0707_fa_400.csv", row.names = F)
 
 
 
