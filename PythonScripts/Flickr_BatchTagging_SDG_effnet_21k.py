@@ -39,7 +39,7 @@ modelname = "EfficientNetV2L_21k"
 
 
 # SDG
-dataname = "SDG"
+dataname = "KOR"
 
 # KEAL
 # default_path = '/pd/data/crafty/deepGreen'
@@ -50,19 +50,20 @@ dataname = "SDG"
 # out_path_base = "/pd/data/crafty/FlickrEU_result/Tagging_EU2019_v3/"
 
 # Linux
-# default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
-# photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos_V2/'
-# out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
+default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
+photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKOR_Download/Photos_Sep2023_V2'
+out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
 
 # mac
 default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
-photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/Photos_V2/'
+photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrKOR_Download/Photos_Sep2023_V2/'
 out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
 
 
 os.chdir(default_path)
 
-out_path = out_path_base + modelname + "/" + dataname + "/"
+
+out_path = out_path_base + dataname + "/" + modelname +  "/"
 
 # number of images for one batch prediction
 prediction_batch_size = pow(2,7) # 2^8 = 256
@@ -150,7 +151,7 @@ for f_idx in (range(0, len(foldernames))):
         print('--\nroot = ' + root)
 
         # csv output file
-        name_csv = out_path + "Result/" + "/CSV/" + os.path.relpath(root, photo_path_base) + ".csv"
+        name_csv = out_path + "/" + os.path.relpath(root, photo_path_base) + ".csv"
         if os.path.exists(name_csv):
             print("skips as it was done before")
             continue  # skip the folder if there is already the output csv file

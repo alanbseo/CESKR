@@ -21,9 +21,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True  # read broken images
 
 
 
-# EU
-dataname = "SDG"
-# the architecture to use
+# data name
+dataname = "KOR"
+# architecture to use
 arch = 'resnet50'
 # arch = 'resnet50'
 model_name = 'places365_' + arch
@@ -56,20 +56,20 @@ top_n = 10
 
 # mac
 default_path = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/CESKR/'
-photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
+photo_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/FlickrKOR_Download/Photos_Sep2023_V2/'
 out_path_base = '/Users/seo-b/Dropbox/KIT/CES_SEOUL/Output/'
 
 # linux
-default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
-photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKR_download/Photos/'
-out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
+# default_path = '/home/alan/Dropbox/KIT/CES_SEOUL/CESKR/'
+# photo_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/FlickrKOR_Download/Photos_Sep2023_V2/'
+# out_path_base = '/home/alan/Dropbox/KIT/CES_SEOUL/Output/'
 
 
 
 
 os.chdir(default_path)
 
-out_path = out_path_base + model_name + "/" + dataname + "/"
+out_path = out_path_base +  "/" + dataname + "/" +model_name + "/"
 
 
 
@@ -144,19 +144,15 @@ def mycollate_fn(batch):
 
 
 
-
-
-
-
 # list only folder names
 foldernames = [d for d in os.listdir(photo_path_base) if os.path.isdir(os.path.join(photo_path_base, d))]
 
 # f_idx = 0
 
-f_idx = 0
+f_idx = 1
 
-for f_idx in reversed(range(0, len(foldernames))):
-#for f_idx in (range(0, 2)):
+for f_idx in (range(0, len(foldernames))):
+#for f_idx in reversed(range(20, 22)):
 
     foldername = foldernames[f_idx]
     print(f_idx)
@@ -170,14 +166,13 @@ for f_idx in reversed(range(0, len(foldernames))):
 
 
         # csv output file
-        name_csv = out_path + "Result/" + "/CSV/" + os.path.relpath(root, photo_path_base) + ".csv"
+        name_csv = out_path + "/" + "/" + os.path.relpath(root, photo_path_base) + ".csv"
         if os.path.exists(name_csv):
             print("skips as it is done already")
             continue  # skip the folder if there is already the output csv file
 
-
         print('--\nroot = ' + root)
-        # print(subdirs)
+        print(subdirs)
 
 
         # pytorch dataset and dataloader
