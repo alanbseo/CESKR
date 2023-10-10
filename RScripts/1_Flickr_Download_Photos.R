@@ -11,14 +11,14 @@ library(readxl)
 library(stringr)
 
 
-n.thread <- detectCores() * 0.5 # 1 
-proj4.LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"
+n_thread <- detectCores() * 0.5 # 1 
+proj4_LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"
 proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=bessel +towgs84=598.1,73.7,418.2,0.202,0.045,-2.455,6.7 +units=m +no_defs" # epsg:31468
 
 proj4.etrs_laea <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs";
 # proj4.EUR_ETRS89_LAEA1052 <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs" # EPSG:3035
 
- 
+
 
 path_apikey = "~/Dropbox/KIT/FlickrEU/deepGreen/"
 
@@ -27,69 +27,124 @@ apikey_con = file(paste0(path_apikey, "/Flickr_API_KEY.txt"), open = "r")
 api_key = readLines(apikey_con)
 close(apikey_con)
 # 
- 
 
- 
- 
-photodir <-  "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/Photos"
- 
+
+path_GIS = "~/Dropbox/GIS Data/"
+
+path_data = "~/Dropbox/KIT/CES_SEOUL/CESKR/DATA/"
+
+photodir <-  "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_download/Photos_Sep2023_V2/"
+
 
 checkImage = FALSE
 
- 
+
 # Time span
 mindate <- "2005-01-01"
-maxdate <- "2022-07-19"
+maxdate <- "2023-08-31"
 # savedir <- substr(mindate, 6, 10)
-savedir <- "July2022_V1/"
-workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/"
+savedir <- "Sep2023_Korea_V2/"
+workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_download/"
 # workdir <-  "~/Dropbox/KIT/FlickrEU/Costa Rica_Data/FlickrCR_download/"
 gisdir = "../GIS"
+
+
+
 
 if (!dir.exists(paste0(photodir))) { 
     dir.create(photodir, recursive = T)
 }
 
 
-aoi_poly_in = readOGR( dsn = paste0(path_data, "GIS/"), layer = "FlickrSDG_AOI_19July2022")
+
+
+system.time({
+    AOI_poly_in <- sfarrow::st_read_parquet(paste0(path_GIS, "Korea/Admin/", "Korea_Grid_10km_EPSG5186.parquet")) # , col_select = c("gid_e", "geom"))
+})  
 
 
 
 
 #### Download photos 
-aois.done.newnames <- list.files(paste0(workdir, "/", savedir, "/Xlsx/"), pattern = "^AOI.*.\\.xlsx$", full.names = T)
+
+AOI_poly_in$CELL_Region = (str_sub(AOI_poly_in$gid_e, 1, 2)) # 30
+
+aoi_cellregion_path_v = paste0(workdir, savedir,  "/Xlsx/AOI_CellRegion_",  AOI_poly_in$CELL_Region)
+
+
+lst = list.files(paste0(workdir, savedir,  "/Xlsx/"), pattern = "^AOI\\_CellID\\_*.*\\.xlsx$", recursive = T)
+
+str(lst)
+
+konflikt_aois = str_detect(lst[], pattern = "\ ")
+
+# (?<=eat)[a-z]*
+done_aois = str_extract(lst[], pattern = "(?<=AOI_CellID_)[a-zA-Z0-9]*")
+tb1 = table(done_aois)
+stopifnot(all(tb1==1))
+# print(done_aois)
+# 
+# done_v = (target_ids %in% done_aois)
+# done_tb = table(done_v)
+# print(done_tb)
+
+
+
+
+
 
 # aoi.idx <- 1
- 
 
 
-registerDoMC(n.thread)
+n_thread = 1 
+
+if (n_thread > 1) { 
+    registerDoMC(n_thread)
+}
+
 Sys.setlocale(category = "LC_ALL", "en_US.UTF-8")
 
 
-# target.ids <- readRDS("Bayern_aoiid.Rds")
-# target.ids <- 13225:16370 # Bayern 
- 
-target.ids.all <- aoi_poly_in$CELL_ID
- 
 
 
-foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .verbose = F) %do% { 
+
+
+foreach (i = 1:length(done_aois), .inorder = F, .errorhandling = "stop", .verbose = F) %do% { 
     
- 
+    cat(i)
+    aoi_cellid = done_aois[i]
     
-    # print("process")
-    aoi.tmp <- aois.done.newnames[i]
-    aoi_cellid = target.ids.all[i]
-    aoi_cellid_idx = which(aoi_poly_in$CELL_ID == aoi_cellid)
+    aoi_cellid_idx =  match(aoi_cellid, AOI_poly_in$gid_e )
     
-    print(paste0("i=", i, " CellID=", aoi_cellid))
+    aoi_cellregion = AOI_poly_in$CELL_Region[aoi_cellid_idx]
     
-    aoi_region = aoi_poly_in$CTP_ENG_NM[aoi_cellid_idx]
-     
+    stopifnot(!is.na(aoi_cellregion))
     
-    # aoi.dt <- read.xlsx(aoi.tmp, 1, detectDates = F)
-    aoi.dt.raw <- data.frame(read_excel(aoi.tmp, sheet = 1))
+    aoi_cellregion_path = paste0(workdir, savedir,  "/Xlsx/AOI_CellRegion_", aoi_cellregion)
+    
+    
+    print(paste0("cell_id ",aoi_cellid))
+    
+    aoi <- AOI_poly_in[aoi_cellid_idx, ]
+    aoi_bbox <- sf::st_transform(AOI_poly_in[aoi_cellid_idx,], proj4_LL) %>% sf::st_bbox()
+    aoi_bbox.txt <- paste(aoi_bbox[1], aoi_bbox[2], aoi_bbox[3], aoi_bbox[4], sep=",")
+    
+    
+    aoi_fname_tmp = paste0( workdir, savedir,  "/Xlsx/", lst[i])
+    
+    
+    tryCatch(
+        aoi.dt.raw <- data.frame(read_excel(aoi_fname_tmp, sheet = 1))
+        , error= function(e) {
+            print(e); print("XLSX is null"); return(NULL)
+        }
+    )
+    
+    
+    
+    
+    
+    
     # aoi.dt$Title <- iconv(aoi.dt$Title, from="UTF-8", to="ASCII", sub="")
     # aoi.dt$Username <- iconv(aoi.dt$Username, from="UTF-8", to="ASCII", sub="") # Special characters.. be careful as we flattend the UTF-8 usernames to ASCII
     
@@ -101,13 +156,11 @@ foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .v
     
     
     if (is.null(nrow(aoi.dt)) || nrow(aoi.dt)==0) {   
-        # write.xlsx(data.frame(NA), aois.done.newnames[aoi.idx], overwrite=T)
-        imgdir <- paste0(photodir, "/", "AOI_", i, "_EMPTY")
-        if (!dir.exists(imgdir)) { 
-            dir.create(imgdir, recursive = T)
-            cat("AOI_", aoi_cellid, "_created >")
-            
-        }
+        # imgdir <- paste0(photodir, "/", "AOI_", aoi_cellid, "_EMPTY")
+        # if (!dir.exists(imgdir)) { 
+        #     dir.create(imgdir, recursive = T)
+        #     cat("AOI_", aoi_cellid, "_created >")
+        # }
         print(paste(aoi_cellid, " has no photos >")   )
         return(NULL)
     } else {
@@ -133,22 +186,19 @@ foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .v
     # aoi.dt$LandcoverDesc <- aoi.clc_lebel3
     
     
-    foreach (p.idx = 1:nrow(aoi.dt), .inorder = F, .errorhandling = "stop", .verbose = F) %dopar% { 
+    foreach (p.idx = 1:nrow(aoi.dt), .inorder = F, .errorhandling = "stop", .verbose = F) %do% { 
         photo.year <- aoi.dt$Year[p.idx]
         # photo.landcoverdesc <- aoi.dt$LandcoverDesc[p.idx]
         photo.owner <- aoi.dt$Owner[p.idx]
         photo.id <- aoi.dt$PhotoID[p.idx]
         photo.date <- aoi.dt$Date[p.idx]
         
-        imgdir.annual <- paste0(photodir, "/", "AOI_CellID", formatC(aoi_cellid, width = 6, flag = "0"), "_", aoi_region, "/", photo.year)
+        imgdir.annual <- paste0(photodir, "/", "AOI_CellID", formatC(NULL, width = 6, flag = "0"), "_", aoi_cellregion, "/", photo.year)
         
         if (!dir.exists(imgdir.annual)) { 
             cat("AOI_", aoi_cellid, "_create ", photo.year, "_s>")
-            
             dir.create(imgdir.annual, recursive = T)
         }
-        
-
         
         server = str_split(aoi.dt$URL, "/")[[p.idx]][4]
         secret = str_split(str_split(aoi.dt$URL, "/")[[p.idx]][5], "_")[[1]][2]
@@ -158,8 +208,10 @@ foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .v
         temp <- paste(imgdir.annual, "/photoid_", photo.id, "_date_", photo.date, "_owner_", photo.owner, ".jpg", sep="")
         
         if (!file.exists(temp)) {
+            
             cat("AOI_", aoi_cellid, "_photoid", photo.id, "_s>")
-            tryCatch(download.file(photo_url, temp, mode="wb", cacheOK = T), error= function(e) {print(e); print("continue..")})            
+            tryCatch(download.file(photo_url, temp, mode="wb", cacheOK = T), error= function(e) {print(e); print("continue..")})
+            
         } else { 
             
             
@@ -170,7 +222,7 @@ foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .v
                     print("re-download the file")
                     cat("AOI_", aoi_cellid, "_photoid", photo.id, "_s>")
                     
-                    download.file(photourl, temp, mode="wb")
+                    tryCatch(download.file(photo_url, temp, mode="wb", cacheOK = T), error= function(e) {print(e); print("continue..")})
                 } else {
                     # cat(aoi.idx, "_", photo.id, "_s>")
                     cat(".")
@@ -187,6 +239,7 @@ foreach (i = 1:length(target.ids.all), .inorder = F, .errorhandling = "stop", .v
     
     return(NULL)
 }
+
 
 
 

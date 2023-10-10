@@ -1,24 +1,27 @@
-
-library(rgdal)
 library(httr)
-library(RCurl)
+# library(RCurl)
 library(rjson)
 # library(jsonlite)
-library(raster)
-library(rgdal)
+# library(terra)
+library(dplyr)
+# library(rgdal)
 library(rgeos)
 library(openxlsx)
 library(stringr)
-library(doMC)
+library(doSNOW)
+library(foreach) # %do% and %dopar%
+
 library(parallel)
 library(sf)
+# library(arrow)
+# install.packages('sfarrow')
+library(sfarrow)
 
-n_thread <-   detectCores()  
 # proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=bessel +towgs84=598.1,73.7,418.2,0.202,0.045,-2.455,6.7 +units=m +no_defs" # epsg:31468
 
 
 #` proj4strings
-proj4_ll <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0" # WGS84 EPSG:4326 
+proj4_LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0" # WGS84 EPSG:4326 
 proj4.UTM52N <- "+proj=utm +zone=52 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0" # UTM52N (WGS84) EPSG:32652
 proj4.MODIS <- "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs" 
 proj4.TM2010 <- "+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
@@ -27,7 +30,8 @@ proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=be
 
 
 # locations 
-path_data = "~/Dropbox/KIT/CES_SEOUL/DATA/"
+path_GIS = "~/Dropbox/GIS Data/"
+path_data = "~/Dropbox/KIT/CES_SEOUL/CESKR/DATA/"
 path_wd = "~/Dropbox/KIT/CES_SEOUL/CESKR/"
 
 # Search data: either hashtag or location (bbox = Bounding Box)
@@ -37,7 +41,6 @@ hashtag <- "" # Set "" for all hashtags
 
 
 
-n.thread <- detectCores() # 1 
 
 # Login credentials
 # api.key <- "" # An API key for Flickr API
@@ -50,40 +53,87 @@ apikey_con = file("Flickr_API_KEY.txt", open = "r")
 api_key = readLines(apikey_con)
 close(apikey_con)
 
+# 
+name_machine <- Sys.info()["nodename"]
+
 
 # Time span
 mindate <- "2005-01-01"
-maxdate <- "2022-07-19"
+maxdate <- "2023-08-31"
 # savedir <- substr(mindate, 6, 10)
-savedir <- "July2022_V1/"
+savedir <- "Sep2023_Korea_V2/"
 workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/"
 # workdir <-  "~/Dropbox/KIT/FlickrEU/Costa Rica_Data/FlickrCR_download/"
 gisdir = "../GIS"
 
 if (!dir.exists(paste0(workdir, savedir, "/Xlsx"))) { 
     dir.create(paste0(workdir, savedir, "/Xlsx"), recursive = T)
-    dir.create(paste0(workdir, savedir, "/Rds"), recursive = T)
+    dir.create(paste0(workdir, "/logs"), recursive = T)
     
 }
 
+# Read Area of Interest polygons
+# system.time({
+# AOI_poly_in = read_sf(paste0(path_GIS, "Korea/Admin/", "Korea_PopGrid_100m_EPSG5186.gpkg"))
+# }) # 71 sec
+# AOI_poly_in$gid = NULL
+# AOI_poly_in$OBJECTID = NULL
+# AOI_poly_in$Shape_Length = NULL
+# AOI_poly_in$Shape_Area = NULL
 
-aoi_poly_in = readOGR( dsn = paste0(path_data, "GIS/"), layer = "FlickrSDG_AOI_19July2022")
+# sfarrow::st_write_parquet(obj=AOI_poly_in, dsn=file.path(paste0(path_GIS, "Korea/Admin/", "Korea_PopGrid_100m_smallsize_EPSG5186.parquet")))
+
+# read usuing sfarrow
+# if (!exists("AOI_poly_in")) { 
+#     system.time({
+#         # AOI_poly_in <- sfarrow::st_read_parquet(paste0(path_GIS, "Korea/Admin/", "Korea_PopGrid_100m_smallsize_EPSG5186.parquet")) # , col_select = c("gid_e", "geom"))
+#     }) # 33 sec
+# }
+
+
+
+# read usuing sfarrow
+if (!exists("AOI_poly_in")) {
+    
+    AOI_poly_in = read_sf(paste0(path_GIS, "Korea/Admin/", "SGIS/SGIS_Grid_10K.shp"))
+    names(AOI_poly_in)[1] = c("gid")
+    
+    kalphabet = "가나다라마바사아자차카타파하"
+    kalphabet_v = strsplit(kalphabet, split = "")[[1]]
+    alphabet_v = LETTERS[seq_along(kalphabet_v)]
+    
+    
+    nvec = alphabet_v
+    names(nvec) = kalphabet_v
+    
+    str_replace_all(kalphabet, pattern = kalphabet_v,  replacement = alphabet_v)
+    str_replace_all(kalphabet, pattern = c("가" = "A", "다" = "C"))
+    str_replace_all(kalphabet, pattern = nvec) # use named vector
+    AOI_poly_in$gid_e  = str_replace_all(AOI_poly_in$gid, pattern = nvec) # use named vector
+    
+    # plot(AOI_poly_in["gid_e"], col = topo.colors(nrow(AOI_poly_in)))
+    
+    sfarrow::st_write_parquet(obj=AOI_poly_in, dsn=file.path(paste0(path_GIS, "Korea/Admin/", "Korea_Grid_10km_EPSG5186.parquet")))
+    write_sf(obj=AOI_poly_in, dsn=file.path(paste0(path_GIS, "Korea/Admin/", "Korea_Grid_10km_EPSG5186.shp")))
+    
+    
+    
+} else {
+    
+    
+    
+    
+    system.time({
+        AOI_poly_in <- sfarrow::st_read_parquet(paste0(path_GIS, "Korea/Admin/", "Korea_Grid_10km_EPSG5186.parquet")) # , col_select = c("gid_e", "geom"))
+    }) # 33 sec
+}
 
 
 # Search parameters
 sort <- "date-taken-asc" # "date-posted-desc" # "date-taken-asc" # "interestingness-desc" # Sort by Interestingness (or: relevance)
 max.perpage <- 250 # number per page maximum 250
-n_points <- length(aoi_poly_in)
-# n_points <- 10
-
-
-# tok = authenticate(api.key, api.secret)
-# flickr_tags.getHotList(api.secret, tok, api.key)    
-# 
-# s$getHotList(verbose = TRUE, format = 'json')
-# s$getHotList(verbose = TRUE, .convert = NA)
-# s$getHotList(verbose = TRUE, .convert = xmlRoot)    
-
+# n_points <- nrow(AOI_poly_in)
+# 10122596
 
 
 
@@ -91,130 +141,170 @@ max_try = 20
 geturl.opts <- list(timeout = 20, maxredirs = max_try, verbose = T)
 
 
-print("metadata download start..")
 
-registerDoMC(n_thread)
+
+# Assign CELL IDs
+AOI_poly_in$CELL_ID = AOI_poly_in$gid_e # Grid ID in English 
+AOI_poly_in$CELL_Region = (str_sub(AOI_poly_in$gid_e, 1, 2)) # 30
+
+target_ids <- AOI_poly_in$CELL_ID
+
+
+# aoi_cellid_idxs = 3E5:1 # length(target_ids) # seq_along(target_ids)
+# aoi_cellid_idxs = 4E5:4.001E5
+
+# aoi_cellid_idxs = 2.5E5:3.5E5 # :length(target_ids) # match("BB873799", target_ids)
+# aoi_cellid_idxs =match("CG662465", target_ids)
+aoi_cellid_idxs = 1:length(target_ids) # seq_along(target_ids)
+
+
+
+aoi_cellregion_path_v = paste0(workdir, savedir,  "/Xlsx/AOI_CellRegion_",  AOI_poly_in$CELL_Region)
+
+
+lst = list.files(paste0(workdir, savedir,  "/Xlsx/"), pattern = "^AOI\\_CellID\\_*.*\\.xlsx$", recursive = T)
+
+str(lst)
+
+
+# (?<=eat)[a-z]*
+done_aois = str_extract(lst[], pattern = "(?<=AOI_CellID_)[a-zA-Z0-9]*")
+
+print(done_aois)
+
+undone = (target_ids %in% done_aois)
+table(undone)
+length(undone)
+
+# done_flag = foreach (aoi_cellid_idx = 1:length(target_ids), .errorhandling = "stop", .inorder = T, .verbose = F) %do% {
+#     
+#     cat(">")
+#  
+#     lst = list.files(paste0(workdir, savedir,  "/Xlsx/AOI_CellRegion_", AOI_poly_in$CELL_Region[aoi_cellid_idx]), pattern =AOI_poly_in$CELL_ID[aoi_cellid_idx])
+#     
+#      
+#     return (length(lst) > 0)
+#     
+# } 
+
+
+
+
+if (length(target_ids)==0) {
+    stop("nothing to go")
+} else {
+    print("Range of cells")
+    print(range(aoi_cellid_idxs))
+}
+
+
+
+n_thread <- 1  # detectCores()  
+
+
+DoSNOW = FALSE # then doMC
+
+if (DoSNOW) { 
+    cl = makeCluster(n_thread)
+    registerDoSNOW(cl)
+} else {
+    doMC::registerDoMC(n_thread)
+}
 
 # Retreiving the data
 
-
-target_ids_all <- aoi_poly_in$CELL_ID # SDG
- 
-aois_done <- list.files(paste0(workdir, "/", savedir, "/Xlsx"), pattern = "^AOI_*.")
-aois_done_v <- (as.numeric(sapply(aois_done, FUN = function(x)  (str_split(x, pattern = "_")[[1]][3]))))
-
-wantToDeleteDup <- FALSE
-
-# if (wantToDeleteDup) {
-#     tb1 <- (table(aois_done_v))
-#     aoiids.dup <- names(tb1[tb1>1])
-#     for (d_idx in 1:length(aoiids.dup)) {
-#         aoi_probl <- aoiids.dup[d_idx]
-#         aoi_dup_tmp_v <- aois_done[aois_done_v %in% aoi_probl]
-#         nphotos_done_tmp_v <- as.numeric(sapply(aoi_dup_tmp_v, FUN = function(x)  str_extract(str_split(x, pattern = "_")[[1]][7], "[0-9]+")))
-#         largest <- which.max(nphotos_done_tmp_v)
-#         
-#         file.copy(from = paste0(workdir, "/", savedir, "/Xlsx/", aoi_dup_tmp_v[-largest]), to = paste0(workdir, "/", aoi_dup_tmp_v[-largest]))
-#         file.remove(paste0(workdir, "/", savedir, "/Xlsx/", aoi_dup_tmp_v[-largest]))
-#     }
-# }
+print("metadata downloading..")
+# sink(paste0(workdir, "/logs/", name_machine, "_", Sys.time(), "_output.txt"), append = T)	   # Redirect output to the file
 
 
 
-target_ids <-   (setdiff(target_ids_all, aois_done_v))
-length(target_ids_all) - length(target_ids) 
-cat(length(target_ids), "to go")
+SLEEP_SEC = 0 
 
-name_machine <- Sys.info()["nodename"]
-
-
-# sink(paste0(workdir, "/logs/", name.machine, "_", Sys.time(), "_output.txt"))	   # Redirect output to the file
- 
-
-if (length(target_ids)==0) {
-    ids_togo = NA
-    stop("nothing to go")
-} else {
-
-    ids_togo = 1:length(target_ids)
-}
-
-stopifnot(!is.na(ids_togo))
-
- 
-
-final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .verbose = F) %do% {
+final_res_msg = foreach (aoi_cellid_idx = aoi_cellid_idxs, .errorhandling = "stop", .inorder = F, .verbose = F, .packages = c("foreach", "dplyr", "sf")) %do% { # .packages = c("rgeos", "rgdal", "rjson", "stringr", "sf", "httr", "foreach")
     
-    aoi_cellid = target_ids[i]
-    aoi_cellid_idx = which(aoi_poly_in$CELL_ID == aoi_cellid)
     
-    aoi_cellregion = aoi_poly_in$CTP_ENG_NM[aoi_cellid_idx]
-    stopifnot(!is.na(aoi_cellid))
     
-     
+    aoi_cellid =  AOI_poly_in$CELL_ID[aoi_cellid_idx] 
     
-    aois_done <- list.files(paste0(workdir, "/", savedir, "/xls"), pattern = "^aoi_*.\\.xlsx$")
-    aois_done_v <- as.numeric(sapply(aois_done, FUN = function(x) (str_split(x, pattern = "_")[[1]][3])))
+    aoi_cellregion = AOI_poly_in$CELL_Region[aoi_cellid_idx]
     
-    if (aoi_cellid %in% aois_done_v) { 
+    stopifnot(!is.na(aoi_cellregion))
+    
+    aoi_cellregion_path = paste0(workdir, savedir,  "/Xlsx/AOI_CellRegion_", aoi_cellregion)
+    
+    
+    if (!dir.exists(aoi_cellregion_path)) { 
+        dir.create(aoi_cellregion_path, recursive = T)
+    }
+    
+    aois_done <- list.files(paste0(aoi_cellregion_path), pattern = "^AOI\\_CellID\\_*.*\\.xlsx$")
+    aois_done_v <- sapply(aois_done, FUN = function(x) (stringr::str_split(x, pattern = "_")[[1]][3]))
+    
+    if (aoi_cellid %in% aois_done_v) {
         print("skip")
-        return(T)   
+        return(NULL)
+    } else {
+        print(paste0("sleep for ", SLEEP_SEC, " sec"))
+        Sys.sleep(SLEEP_SEC)
     }
     
     
-    print(paste0("cell_id=",aoi_cellid))
+    print(paste0("cell_id ",aoi_cellid))
     
-    aoi <- aoi_poly_in[aoi_cellid_idx, ]
-    aoi_bbox <- bbox (aoi)
-    aoi_bbox.txt <- paste(aoi_bbox[1,1], aoi_bbox[2,1], aoi_bbox[1,2], aoi_bbox[2,2], sep=",")
+    aoi <- AOI_poly_in[aoi_cellid_idx, ]
+    aoi_bbox <- sf::st_transform(AOI_poly_in[aoi_cellid_idx,], proj4_LL) %>% sf::st_bbox()
+    aoi_bbox.txt <- paste(aoi_bbox[1], aoi_bbox[2], aoi_bbox[3], aoi_bbox[4], sep=",")
     
     
-     
     # extras <- c("description, license, date_upload, date_taken, owner_name, icon_server, original_format, last_update, geo, tags, machine_tags, o_dims, views, media, path_alias, url_sq, url_t, url_s, url_q, url_m, url_n, url_z, url_c, url_l, url_o")
     extras <- c("date_taken,owner_name,geo,tags,machine_tags") #,url_z")
     
-    # api <-     paste("https://api.flickr_com/services/rest/?method=flickr_photos_search&format=json&api_key=", api.key, "&nojsoncallback=1&page=1&per_page=", max.perpage, "&bbox=", aoi_bbox.txt, "&min_taken_date=", mindate, "&max_taken_date=", maxdate, "&sort=", sort, "&privacy_filter=", "1",sep="")
+    # api <- paste("https://api.flickr_com/services/rest/?method=flickr_photos_search&format=json&api_key=", api.key, "&nojsoncallback=1&page=1&per_page=", max.perpage, "&bbox=", aoi_bbox.txt, "&min_taken_date=", mindate, "&max_taken_date=", maxdate, "&sort=", sort, "&privacy_filter=", "1",sep="")
     api <- paste0("https://api.flickr.com/services/rest/?method=flickr.photos.search&format=json&api_key=", api_key, "&nojsoncallback=1&page=1&per_page=", max.perpage, "&bbox=", aoi_bbox.txt, "&min_taken_date=", mindate, "&max_taken_date=", maxdate, "&sort=", sort, "&privacy_filter=", "1", "&extras=", extras)
     
     
-    imgdir <- paste(workdir, savedir, "AOI_CELLID_", aoi_cellid, "/", sep="")
+    httr_tmp  <- httr::GET(api, httr::add_headers("--http1.1"))
+    raw_data_tmp <- httr::content(httr_tmp, "text", encoding = "UTF-8") 
     
     
-    # raw_data_tmp <- getURL(api, ssl_verifypeer = FALSE, .opts = geturl.opts)
-    
-    httr_tmp  <- httr::GET(api)
-    raw_data_tmp <- content(httr_tmp, "text", encoding = "UTF-8") 
-    
-    
-    data_1st <- fromJSON(raw_data_tmp, unexpected.escape="keep", method="C")
+    data_1st <- rjson::fromJSON(raw_data_tmp, unexpected.escape="keep", method="C")
     
     if (data_1st$stat != "ok") { 
         print(paste0("error..", data_1st$stat)   )
         
         stop(paste0("error..", data_1st$stat)   )
         
-        return(F)
+        return(NULL)
     }
     
     
     n_pages <-  data_1st$photos$pages
-    cat("i=", i, " poly_id=", aoi_cellid, " n_pages=", n_pages, "\n")
+    cat( "Region=", aoi_cellregion,  "cell_idx=", aoi_cellid_idx, " poly_id=", aoi_cellid, " n_pages=", n_pages, "\n")
     
     ### Download metadata
-    if ( data_1st$photos$pages <=0 || length(data_1st$photos$photo) ==0) { # e.g., no photos with one (invalid) page
+    if ( data_1st$photos$pages <= 0 || length(data_1st$photos$photo) ==0) { # e.g., no photos with one (invalid) page
         if (data_1st$stat == "ok") { 
             print("no photos")
-            write.xlsx(data.frame(NA), file = paste0( workdir, savedir,  "/Xlsx/AOI_CellID_", formatC(aoi_cellid, width = 6, flag = "0"), "_", aoi_cellregion ,"_n0.xlsx"), overwrite=T)
+            # write.xlsx(data.frame(NA), file = paste0( workdir, savedir,  "/Xlsx/AOI_CellRegion_", aoi_cellregion, "/CellID_", formatC(aoi_cellid, width = 4, flag = "0"), "_", aoi_cellregion ,"_n0.xlsx"), overwrite=T)
+            writeLines("no data", con = paste0( workdir, savedir,  "/Xlsx/AOI_CellRegion_", aoi_cellregion, "/AOI_CellID_", formatC(aoi_cellid, width = 4, flag = "0"), "_n0.xlsx"))
             
-            return(T)
+            
+            return(NULL)
         } else {
             print(paste0("error..", data_1st$stat)   )
             stop(paste0("error..", data_1st$stat)   )
-            return(F)
+            return(NULL)
             
         }
         
     } else {  
+        
+        
+        print("photos exist")
+        
+        
+        # 
+        # return(T)
         
         
         data_l_tmp <- vector("list", length = n_pages)
@@ -232,7 +322,7 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
                 
                 # raw_data_tmp <- getURL(api_tmp, ssl_verifypeer = FALSE, .opts = geturl.opts) # , .encoding = "UTF-8", .mapUnicode = T)
                 
-                raw_data_tmp <- content(httr::GET(api_tmp), "text", encoding = "UTF-8") 
+                raw_data_tmp <- httr::content(httr::GET(api_tmp, httr::add_headers("--http1.1")), "text", encoding = "UTF-8") 
                 #    
                 # rjson::fromJSON(raw_data_tmp, unexpected.escape="skip", method="R", encoding="UTF-8")
                 #   
@@ -243,7 +333,7 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
                 
                 
                 # data_l_tmp[[p_idx]] <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
-                res_tmp <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
+                res_tmp <- rjson::fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
                 
                 if (res_tmp$stat != "ok") { 
                     print(paste0("error..", res_tmp$stat))
@@ -262,20 +352,19 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
         
         
         ## Save meta information
-        # flickrphotos_metadata_list_l[[i]] <- data_l_tmp
+        # flickrphotos_metadata_list_l[[cell_idx]] <- data_l_tmp
         flickrphotos_metadata_specific_df_l <- vector("list", length = n_pages)
-         
+        
         # flickrphotos_metadata_df[aoi_cellid_idx, "n_pages"] <- n_pages
         
         
-        print("photos exist")
         
         for (p_idx in 1:n_pages) { 
             
             print(paste("page ", p_idx))
             
             
-            data_tmp <- data_l_tmp[[p_idx]] #  flickrphotos_metadata_list_l[[i]][[p_idx]]
+            data_tmp <- data_l_tmp[[p_idx]] #  flickrphotos_metadata_list_l[[cell_idx]][[p_idx]]
             # flickrphotos_metadata_df[i, "nallphotos"] <- sum(flickrphotos_metadata_df[i, "nallphotos"] + length(data_tmp$photos$photo), na.rm = T) # todo fix the code
             # print(" flickrphotos_metadata_df[i, nallphotos")
             # print(flickrphotos_metadata_df[i, "nallphotos"])
@@ -292,17 +381,20 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
             flickrphotos_metadata_specific_df_l[[p_idx]] <- vector("list", length = nphotos_tmp)
             
             
-            res_l1 <- foreach (u = 1:nphotos_tmp, .errorhandling = "stop") %dopar% {
+            res_l1 <- foreach (u = 1:nphotos_tmp, .errorhandling = "stop") %do% {
                 
                 
                 info_l <- data_tmp$photos$photo[[u]]
                 
                 # if (info_l$stat == "ok") { 
-                photo.sp <- SpatialPoints(t(as.matrix(as.numeric(c(info_l$longitude, info_l$latitude)))), proj4string = CRS(proj4string(aoi)))
+                aoi_ll = aoi %>% sf::st_transform(proj4_LL) %>% as_Spatial 
                 
-                intersectYN <- gIntersects(photo.sp, aoi)
+                photo_sp <- sp::SpatialPoints(t(as.matrix(as.numeric(c(info_l$longitude, info_l$latitude)))), proj4string = CRS(sp::proj4string(aoi_ll)))
+                
+                sp::proj4string(photo_sp) = proj4_LL
+                sp::proj4string(aoi_ll) = proj4_LL
+                intersectYN <- rgeos::gIntersects(photo_sp, aoi_ll)
                 cat(paste0(">", u, ifelse(intersectYN, "Y",  "N")))
-                # plot(photo.sp, add=T, col=ifelse(intersectYN, "green", "red"))
                 # 
                 if (intersectYN) {
                     
@@ -371,7 +463,7 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
                     # farm <- info_l$farm
                     # server <- info_l$server
                     # secret <-info_l$secret
-                   
+                    
                     
                     # <photo id="3909225696" secret="6bca6c9c41" server="2673" farm="3" dateuploaded="1252654170" isfavorite="0" license="0" safety_level="0" rotation="0" originalsecret="5282557aeb" originalformat="jpg" views="178" media="photo">
                     #     <owner nsid="30206765@N08" username="nemiso" realname="Guntae Park" location="" iconserver="4672" iconfarm="5" path_alias="nemiso">
@@ -385,7 +477,7 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
                     #     
                     # https://live.staticflickr.com/2673/3909225696_6bca6c9c41_h.jpg
                     # https://live.staticflickr.com/2673/3909225696_6bca6c9c41_h.jpg
-
+                    
                     photo_url <- paste0("https://live.staticflickr.com/", info_l$server, "/",photo.id, "_", info_l$secret, "_", "z.jpg")
                     
                     
@@ -410,6 +502,18 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
         }
         
         metadata_tmp <- data.frame(do.call(rbind, flickrphotos_metadata_specific_df_l))
+        
+        ### 
+        if (nrow(metadata_tmp) == 0) { 
+            print("No photo within the cell")
+            writeLines("no data", con = paste0( workdir, savedir,  "/Xlsx/AOI_CellRegion_", aoi_cellregion, "/AOI_CellID_", formatC(aoi_cellid, width = 4, flag = "0"), "_n0.xlsx"))
+            
+            
+            return(T)
+            
+        }
+        
+        
         metadata_tmp <- metadata_tmp[!is.na(metadata_tmp$PhotoID),]
         
         metadata_tmp = metadata_tmp[match(unique(metadata_tmp$PhotoID), metadata_tmp$PhotoID),]
@@ -421,20 +525,21 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
         # user_id (Required) The NSID of the user to fetch information about. 
         
         owner_v = unique(as.character(metadata_tmp$Owner))
-        cat("# of users :", length(owner_v))
+        cat("# of users :", length(owner_v), " ")
         
-        userinfo_df = foreach (o_idx = 1:length(owner_v), .combine="rbind", .errorhandling = "stop") %dopar% {
+        userinfo_df = foreach (o_idx = 1:length(owner_v), .combine="rbind", .errorhandling = "stop") %do% {
             
             
             owner_tmp =  (owner_v[o_idx])
-            print(owner_tmp)
+            cat(">", o_idx, ">")
+            cat(owner_tmp)
             api_tmp <- paste0("https://api.flickr.com/services/rest/?method=flickr.profile.getProfile&format=json&api_key=", api_key, "&nojsoncallback=1&user_id=", owner_tmp )
             
-            raw_data_tmp <- content(httr::GET(api_tmp), "text", encoding = "UTF-8") 
+            raw_data_tmp <- httr::content(httr::GET(api_tmp, httr::add_headers("--http1.1")), "text", encoding = "UTF-8") 
             
             
             # data_l_tmp[[p_idx]] <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
-            res_tmp <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
+            res_tmp <- rjson::fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
             
             if (res_tmp$stat != "ok") { 
                 print(paste0("error..", res_tmp$stat))
@@ -454,11 +559,11 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
             
             api_tmp <- paste0("https://api.flickr.com/services/rest/?method=flickr.people.getInfo&format=json&api_key=", api_key, "&nojsoncallback=1&user_id=", owner_tmp )
             
-            raw_data_tmp <- content(httr::GET(api_tmp), "text", encoding = "UTF-8") 
+            raw_data_tmp <- httr::content(httr::GET(api_tmp, httr::add_headers("--http1.1")), "text", encoding = "UTF-8") 
             
             
             # data_l_tmp[[p_idx]] <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
-            res_tmp <- fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
+            res_tmp <- rjson::fromJSON(raw_data_tmp, unexpected.escape="skip", method="C")
             
             if (res_tmp$stat != "ok") { 
                 print(paste0("error..", res_tmp$stat))
@@ -480,9 +585,8 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
         } else {
             userinfo_df_expanded = data.frame(matrix(nrow = nrow(metadata_tmp), data=NA, ncol=length(userinfo_df)))
             userinfo_df_expanded[match(metadata_tmp$Owner, owner_v),] = userinfo_df
-            print(    userinfo_df)
-            print(    userinfo_df_expanded)
-            
+            # print(    userinfo_df)
+            # print(    userinfo_df_expanded)
         }
         
         metadata_tmp =   cbind(metadata_tmp, userinfo_df_expanded)
@@ -492,26 +596,29 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
         
         # stopifnot(nrow(metadata_tmp)== flickrphotos_metadata_df[i, "nallphotos"] )
         
-        saveRDS(metadata_tmp, file = paste0( workdir, savedir,  "Rds/AOI_CellID_", formatC(aoi_cellid, width = 6, flag = "0"), "_", aoi_cellregion, "_n", nrow(metadata_tmp), ".Rds"))
+        # saveRDS(metadata_tmp, file = paste0( workdir, savedir,  "Rds/AOI_CellID_", formatC(aoi_cellid, width = 6, flag = "0"), "_", aoi_cellregion, "_n", nrow(metadata_tmp), ".Rds"))
         
+        # print("rds written")
         
         # metadata_tmp$FlickrTags <- iconv(metadata_tmp$FlickrTags, from="UTF-8", to="ASCII", sub="")
         metadata_tmp$Title <- iconv(metadata_tmp$Title, from="UTF-8", to="ASCII", sub="")
         
         
-        write.xlsx(metadata_tmp, file = paste0( workdir, savedir,  "Xlsx/AOI_CellID_", formatC(aoi_cellid, width = 6, flag = "0"), "_", aoi_cellregion, "_n", nrow(metadata_tmp), ".xlsx"), overwrite=T, )
+        openxlsx::write.xlsx(metadata_tmp, file = paste0(aoi_cellregion_path, "/AOI_CellID_", formatC(aoi_cellid, width = 4, flag = "0"), "_n", nrow(metadata_tmp), ".xlsx"), overwrite=T)
         
-        
+        print("xlsx written")
     }
     
     
-    if ((i %%10) ==0) {
+    if ((aoi_cellid_idx %%1E5) ==0) {
         # print (paste0 ("Saving temporary results ", i, ">"))
         # save.image( file =paste0( "tmp/FlickrEU_temp_workspace_by_", i, "_",Sys.time(), ".RData"))
         
         print("gc")
         gc()
     }
+    
+    return(NULL)
 }
 
 # sink()				   # close the file output.txt
@@ -519,5 +626,6 @@ final_res_msg = foreach (i = ids_togo, .errorhandling = "stop", .inorder = F, .v
 
 # save.image(paste0(workdir, savedir, "/Flickr_CR_workspace_metadata_download_17Aug2019.RData"))
 
- 
-
+if (DoSNOW) { 
+    stopCluster(cl)
+}
