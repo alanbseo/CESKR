@@ -1,16 +1,17 @@
+library(data.table)
+
 source("RScripts/0_Flickr_Common.R")
 
 library(readxl)
 
 
-aoi_poly_in
-
+ 
 
 # Retreiving the data 
 
 aois_done <- list.files(paste0(workdir, "/", savedir, "/Xlsx"), pattern = "^AOI\\_CellID\\_.*\\.xlsx$")
 aois_done_v <- as.numeric(sapply(aois_done, FUN = function(x)  (str_split(x, pattern = "_")[[1]][3])))
-years = 2005:2022
+years = 2005:2023
 n_years = length(years)
 
 nphotos_done_v <- as.numeric(sapply(aois_done, FUN = function(x)  str_extract(str_split(x, pattern = "_")[[1]][5], "[0-9]+")))
@@ -27,7 +28,6 @@ sdg_aoi_1km = readOGR(paste0(path_data, "/GIS/FlickrSDG_AOI_1km_19July2022.shp" 
 
 sdg_pud_1km = sdg_aoi_1km
  
-library(data.table)
 
 
 pud_columns = c(paste0("PUD_", years), "PUD_Total")
@@ -180,7 +180,6 @@ barplot(nphotos_per_month, type="l", ylab="# of Flickr photos", xlab = "Month", 
 
 
 ### Annual PUD
-
 
 for (i in 1:length(aois_done)) { 
     # cat(i)

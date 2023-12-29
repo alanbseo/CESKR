@@ -1,4 +1,4 @@
-library(stringi)
+# library(stringi)
 library(ggmap)
 library(stringr)
 library(ggplot2)
@@ -11,19 +11,16 @@ library(rjson)
 library(rgdal)
 library(rgeos)
 library(openxlsx)
-library(stringr)
-library(doMC)
-library(parallel)
-
-
+# library(doMC)
+library(foreach)
+ 
 
 library(terra)
 library(rinat)
 library(sf)
 library(dplyr)
 library(tmap)
-library(leaflet)
-
+ 
 
 # proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=bessel +towgs84=598.1,73.7,418.2,0.202,0.045,-2.455,6.7 +units=m +no_defs" # epsg:31468
 
@@ -38,19 +35,24 @@ proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=be
 
 
 # locations 
+path_GIS = "~/Dropbox/GIS Data/"
 path_data = "~/Dropbox/KIT/CES_SEOUL/DATA/"
 path_wd = "~/Dropbox/KIT/CES_SEOUL/CESKR/"
 
 
 
-savedir <- "July2022_V1/"
-workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/"
+savedir <- "Sep2023_Korea_V2/"
+workdir <- "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_download/"
 
 
+system.time({
+    AOI_poly_in <- sfarrow::st_read_parquet(paste0(path_GIS, "Korea/Admin/", "Korea_Grid_10km_EPSG5186.parquet")) # , col_select = c("gid_e", "geom"))
+}) # 33 sec
 
-aoi_poly_in = read_sf( dsn = paste0(path_data, "GIS/"), layer = "FlickrSDG_AOI_19July2022")
 
-search_results_prefix =  paste0(workdir, savedir, "/iNaturalists/iNaturalists_AOIs_n73322")
+# AOI_poly_in = read_sf( dsn = paste0(path_data, "GIS/"), layer = "FlickrSDG_AOI_19July2022")
+
+search_results_prefix =  paste0(workdir, savedir, "/iNaturalists/iNaturalists_AOIs_n334485")
 
 # Rds data
 inat_dt = readRDS(paste0(search_results_prefix, ".Rds"))
@@ -84,7 +86,7 @@ inat_sf = read_sf(paste0(search_results_prefix, ".shp"))
 
 # 
 # 
-aoi_poly_in_sf = sf::st_transform(aoi_poly_in, crs = st_crs(inat_sf))
+AOI_poly_in_sf = sf::st_transform(AOI_poly_in, crs = st_crs(inat_sf))
 # 
 # df<-plot_data %>% 
 #     filter(!is.na(ethnic)) %>% # subset data with ethnicity only
@@ -105,7 +107,7 @@ aoi_poly_in_sf = sf::st_transform(aoi_poly_in, crs = st_crs(inat_sf))
 
 
 
-myMap <- get_stamenmap(bbox=bbox(as_Spatial(inat_sf)),zoom = 9, maptype="terrain", crop=TRUE)
+myMap <- get_stamenmap(bbox=bbox(as_Spatial(inat_sf)),zoom = 7, maptype="terrain", crop=TRUE)
 ggmap(myMap)
 # 
 # p1 = ggplot(inat_sf, aes(x = Lon, y = Lat)) + 
@@ -134,12 +136,12 @@ p1 = ggmap(myMap)   +
     theme(legend.position = 'none')
 
 
-ggplot2::ggsave(filename = "Plots/iNat_map1.png", plot = p1, device = "png", width = 12, height = 6)
+ggplot2::ggsave(filename = "Plots/iNat_map1.png", plot = p1, device = "png", width = 24, height = 12)
 
 
 
 
-taxa_names_tb = table(inat_sf$icn__)
+taxa_names_tb = table(inat_sf$icnc_t_)
 taxa_names_tb = rev(sort(taxa_names_tb, F))
 taxa_names = names(taxa_names_tb)
 
@@ -153,7 +155,7 @@ dev.off()
 
 foreach(taxa_tmp = taxa_names) %do% {
 
-        inat_tmp = inat_sf %>% filter(icn__ ==taxa_tmp)
+        inat_tmp = inat_sf %>% filter(icnc_t_ ==taxa_tmp)
     
     p2_tmp = ggmap(myMap)   +
         geom_point(data = inat_tmp, aes(x = Lon, y = Lat), size = 0.1, alpha = 0.05)   +
@@ -168,7 +170,7 @@ foreach(taxa_tmp = taxa_names) %do% {
         ggtitle(paste0(taxa_tmp, " (n=", nrow(inat_tmp), ")")) 
     
     
-    ggplot2::ggsave(filename = paste0("Plots/iNat_", taxa_tmp, "_map.png"), plot = p2_tmp, device = "png", width = 12, height = 6)
+    ggplot2::ggsave(filename = paste0("Plots/iNat_", taxa_tmp, "_map.png"), plot = p2_tmp, device = "png", width = 24, height = 12)
     
 }
 

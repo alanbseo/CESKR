@@ -11,16 +11,16 @@ proj4.LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"
 
 
 path_base = "~/Dropbox/KIT/CES_SEOUL/CESKR/"
-path_out_csv = "~/Dropbox/KIT/CES_SEOUL/CESKR/FlickrSDG_result/MergedCSV/"
+path_out_csv = "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/MergedCSV/"
 
-path_SDG_xls = "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/July2022_V1/Xlsx/"
-path_out_network =  "~/Dropbox/KIT/CES_SEOUL/CESKR/FlickrSDG_result/Network/"
+path_xls = "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_download/Sep2023_Korea_V2/Xlsx/"
+path_out_network =  "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/Network/"
 
 
 
 
 # meta data files
-xls_SDG_V = list.files(path_SDG_xls, pattern="\\.xlsx$", full.names = T)
+xls_V = list.files(path_xls, pattern="\\.xlsx$", recursive = T, full.names = T)
 
 
 n_thread = detectCores()
@@ -70,47 +70,66 @@ if (!dir.exists(path_out_network)) {
 # cl = makeCluster(16)
 # registerDoSNOW(cl)
 
-reprocessCSV = FALSE
+reprocessCSV = F
 
 if (reprocessCSV) {
     
     # places
-    path_places =  "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_result/Tags/places365_resnet50/SDG/Result/CSV/"
+    path_places =  "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/Flickr/Tags/places365_resnet50/"
     
     # Imagenet tag
-    path_EFFV2XL_21k =  "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_result/Tags/EfficientNetV2XL_21k/SDG/Result/CSV/"
-    # path_EFFV2L_1k =  "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_result/Tags/EfficientNetV2L_1k/SDG/Result/CSV/"
+    path_EFFV2XL_21k =  "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/Flickr/Tags/EfficientNetV2XL_21k/"
+    path_EFFV2L_1k =   "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/Flickr/Tags/EfficientNetV2L_1k/"
     
     
-    res_l = foreach (i = 1:length(xls_SDG_V), .packages = c("stringr", "readxl", "doSNOW"), .errorhandling = "stop") %do% { 
+    res_l = foreach (i = 1:length(xls_V), .packages = c("stringr", "readxl", "doSNOW"), .errorhandling = "stop") %do% { 
         
-        aoi_tmp = str_extract(xls_SDG_V[i], pattern = "CellID\\_[0-9]*")
+        aoi_tmp = str_extract(xls_V[i], pattern = "CellID\\_[A-Z0-9]*")
         
         aoi_tmp = paste0("AOI_", aoi_tmp)
         
-        
+        cellregion_tmp = str_extract(aoi_tmp, pattern = "[A-Z].(?=[0-9])")
         
         # tagfile_name = str_extract(basename(xls_SDG_V[i]), pattern = ".*(?=.xlsx)")
-        tagfile_name = str_extract(basename(xls_SDG_V[i]), pattern = ".*(?=_n)") # without the number of the photos
+        tagfile_name = str_extract(basename(xls_V[i]), pattern = ".*(?=_n)") # without the number of the photos
         
+        tagfile_name =  str_extract(tagfile_name, pattern = "[^0-9]*")
         
-        
-        out_filename_tmp = paste0(path_out_csv, "/", basename(xls_SDG_V[i])) 
+        out_filename_tmp = paste0(path_out_csv, "/", basename(xls_V[i])) 
         
         if (file.exists(out_filename_tmp)) {
-            return()
+            return(NULL)
         }
         print(i)
         
         
+        
+        nphotos_tmp = str_extract(basename(xls_V[i]), pattern = "(?<=_n)[0-9].")
+        
+        # No photos
+        if (nphotos_tmp == 0) {
+            
+            return(NULL)
+        }
+        
         # Read meta data
-        xl_df = read_xlsx(xls_SDG_V[i])
+        
+        
+        tryCatch({
+            xl_df = read_xlsx  (xls_V[i])
+        }
+        , error= function(e) 
+        {
+            print(e); print("XLSX is null"); return(NULL)
+        }
+        )
+        
         
         
         
         if (nrow(xl_df)==0) { 
             print("no data")
-            return()
+            return(NULL)
             
         }
         
@@ -122,6 +141,8 @@ if (reprocessCSV) {
         # unique(xl_df$PhotoID)
         
         places_df_name = paste0(path_places, "/", tagfile_name, ".csv")
+        
+        # Places365
         places_df = read.csv(places_df_name)  
         photoid_tmp = str_extract(places_df$Filename, pattern="(?<=_)[0-9]*")
         places_df$Filename = NULL
@@ -191,8 +212,8 @@ if (createMatrix) {
     myFunc = function(x, prob, lev) { 
         # print(x)
         # print(prob)
-        # 
-        fac = factor(x, levels = lev, ordered = TRUE)
+
+                fac = factor(x, levels = lev, ordered = TRUE)
         wt = numeric(length(lev))
         wtsum = tapply(prob, INDEX = as.numeric(fac), FUN = sum, na.rm=T)
         wt[as.numeric(names(wtsum))] = wtsum
@@ -249,7 +270,7 @@ if (createMatrix) {
         
         # system.time({ 
         for (i in 1:length(keywords.vec.ref)) {
-                
+            
             # if ((i %% 20) ==0) {
             #     cat(i, ">")
             # }
@@ -284,7 +305,7 @@ if (createMatrix) {
     registerDoMC(n_thread)
     
     
-    n_points = length(xls_SDG_V)
+    n_points = length(xls_V)
     
     # idxs = sample(10000:20000)
     idxs = 1:n_points
@@ -292,13 +313,13 @@ if (createMatrix) {
     
     # idxs = 19053
     
-    foreach (i =rev(idxs), .errorhandling = "stop") %do% {
-    # for (i in (idxs)) {
+    foreach (i =(idxs), .errorhandling = "stop") %dopar% {
+        # for (i in (idxs)) {
         
         if ((i %% 1 ) ==0) {
             cat("AOI_", i, ">")
         }
-        in_filename_tmp = paste0(path_out_csv, "/", basename(xls_SDG_V[i])) 
+        in_filename_tmp = paste0(path_out_csv, "/", basename(xls_V[i])) 
         
         
         if (!file.exists(in_filename_tmp)) {
@@ -307,14 +328,13 @@ if (createMatrix) {
         }
         
         
-        # aoi_tmp = str_extract(xls_SDG_V[i], pattern = "Poly\\_[0-9]*")
+ 
         
-        # aoi_tmp = paste0("AOI_", as.numeric(substr(aoi_tmp, start = 6, 11)))
-        aoi_tmp = str_extract(xls_SDG_V[i], pattern = "CellID\\_[0-9]*")
+        aoi_tmp = str_extract(xls_V[i], pattern = "CellID\\_[A-Z0-9]*")
         
         aoi_tmp = paste0("AOI_", aoi_tmp)
         
-        
+ 
         
         
         dt = NULL    
@@ -357,14 +377,14 @@ if (createMatrix) {
             imgnet_df = dt[, paste0("IMGNET_21k_Top", 1:10)] 
             imgnet_df[imgnet_df==""] = NA
             
-
+            
             imgnet_ID_df = lapply(imgnet_df,FUN = function(x) imgnet21k_tags_df$ID[match(x, imgnet21k_tags_df$Tag)]) %>% data.frame
             
-             
-             
+            
+            
             imgnet_prob_df = dt[, paste0("IMGNET_21k_Prob", 1:10)] 
             imgnet_prob_df[imgnet_prob_df==""] = NA
-             
+            
             
             
             imgnet_mt <- weighted1modematrix(imgnet_ID_df, imgnet_prob_df)
@@ -380,7 +400,7 @@ if (createMatrix) {
 }
 
 
- 
+
 ## aggregate csvs
 
 
@@ -388,12 +408,14 @@ places_all_m <- data.frame(matrix(data = 0, nrow = length(places365_tags), ncol 
 dimnames(places_all_m) <- list( places365_tags, places365_tags)
 
 
-for (i in 1:length(xls_SDG_V))  {
+for (i in 1:length(xls_V))  {
+    
     
  
-    aoi_tmp = str_extract(xls_SDG_V[i], pattern = "CellID\\_[0-9]*")
+    aoi_tmp = str_extract(xls_V[i], pattern = "CellID\\_[A-Z0-9]*")
     
     aoi_tmp = paste0("AOI_", aoi_tmp)
+    
     
     
     
@@ -428,13 +450,13 @@ saveRDS(places_all_m, file = "Data/places_all_m.Rds")
 
 imgnet21k_tags_occurred = c()
 
-for (i in 1:length(xls_SDG_V))  {
+for (i in 1:length(xls_V))  {
     
     # aoi_tmp = str_extract(xls_SDG_V[i], pattern = "Poly\\_[0-9]*")
     # aoi_tmp = paste0("AOI_", as.numeric(substr(aoi_tmp, start = 6, 11)))
-    aoi_tmp = str_extract(xls_SDG_V[i], pattern = "CellID\\_[0-9]*")
+    aoi_tmp = str_extract(xls_V[i], pattern = "CellID\\_[A-Z0-9]*")
     aoi_tmp = paste0("AOI_", aoi_tmp)
-     
+    
     img_name = paste0(path_out_network, "/imgnet_m_", aoi_tmp, ".csv")
     print(img_name)
     if (file.exists(img_name)) { 
@@ -469,15 +491,15 @@ imgnet_all_m[,]= 0
 
 # colnames(imgnet_1mode)[!colnames(imgnet_1mode) %in% imgnet1000_tags]
 
-for (i in 1:length(xls_SDG_V))  {
+for (i in 1:length(xls_V))  {
     
     # aoi_tmp = str_extract(xls_SDG_V[i], pattern = "Poly\\_[0-9]*")
     
     # aoi_tmp = paste0("AOI_", as.numeric(substr(aoi_tmp, start = 6, 11)))
-    aoi_tmp = str_extract(xls_SDG_V[i], pattern = "CellID\\_[0-9]*")
+    aoi_tmp = str_extract(xls_V[i], pattern = "CellID\\_[A-Z0-9]*")
     
     aoi_tmp = paste0("AOI_", aoi_tmp)
-     
+    
     
     
     img_name = paste0(path_out_network, "/imgnet_m_", aoi_tmp, ".csv")

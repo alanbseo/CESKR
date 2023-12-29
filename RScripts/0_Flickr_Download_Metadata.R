@@ -106,9 +106,9 @@ if (!exists("AOI_poly_in")) {
     nvec = alphabet_v
     names(nvec) = kalphabet_v
     
-    str_replace_all(kalphabet, pattern = kalphabet_v,  replacement = alphabet_v)
-    str_replace_all(kalphabet, pattern = c("가" = "A", "다" = "C"))
-    str_replace_all(kalphabet, pattern = nvec) # use named vector
+    # str_replace_all(kalphabet, pattern = kalphabet_v,  replacement = alphabet_v)
+    # str_replace_all(kalphabet, pattern = c("가" = "A", "다" = "C"))
+    # str_replace_all(kalphabet, pattern = nvec) # use named vector
     AOI_poly_in$gid_e  = str_replace_all(AOI_poly_in$gid, pattern = nvec) # use named vector
     
     # plot(AOI_poly_in["gid_e"], col = topo.colors(nrow(AOI_poly_in)))

@@ -1,10 +1,7 @@
-# install.packages("devtools")
-# library(devtools)
 # install_github("DougLuke/UserNetR")
+# library(UserNetR)
 
 library(bigmemory)
-
-library(UserNetR)
 
 library(rgexf)
 library(openxlsx)
@@ -13,8 +10,13 @@ library(rgdal)
 library(scales)
 library(gplots)
 library(reshape2)
-library(raster)
 library(plyr)
+
+
+library(fclust)
+library(cluster)
+
+
 
 # 1. Load data
 
@@ -23,10 +25,10 @@ proj4.LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"
 
 
 path_base = "~/Dropbox/KIT/CES_SEOUL/CESKR/"
-path_out_csv = "~/Dropbox/KIT/CES_SEOUL/CESKR/FlickrSDG_result/MergedCSV/"
+path_out_csv = "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/MergedCSV/"
 
-path_SDG_xls = "~/Dropbox/KIT/CES_SEOUL/FlickrSDG_download/July2022_V1/Xlsx/"
-path_out_network =  "~/Dropbox/KIT/CES_SEOUL/CESKR/FlickrSDG_result/Network/"
+path_xls = "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_download/Sep2023_Korea_V2/Xlsx/"
+path_out_network =  "~/Dropbox/KIT/CES_SEOUL/FlickrKOR_result/Network/"
 
 
 
@@ -38,7 +40,7 @@ proj4.LL <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"
 proj4.DHDN <- "+proj=tmerc +lat_0=0 +lon_0=12 +k=1 +x_0=4500000 +y_0=0 +ellps=bessel +towgs84=598.1,73.7,418.2,0.202,0.045,-2.455,6.7 +units=m +no_defs" # epsg:31468
 
 
-places_all_m = readRDS(paste0(path_out_network, "Data/places_all_m.Rds"))
+places_all_m = readRDS(paste0(path_out_network, "/places_all_m.Rds"))
 
 # imgnet_all_m = read.csv("Data/imgnet_all_m.csv")
 # imgnet_all_m$X.1 = NULL
@@ -49,14 +51,14 @@ places_all_m = readRDS(paste0(path_out_network, "Data/places_all_m.Rds"))
 # imgnet_all_m = imgnet_all_m[-1,]
 # rownames(imgnet_all_m) = colnames(imgnet_all_m)
 
-imgnet_all_m = readRDS("Data/imagenet_all_m.Rds")
+imgnet_all_m = readRDS(paste0(path_out_network, "/imagenet_all_m.Rds"))
 
 
 
 # write.big.matrix( "Data/imagenet_all_m_bigmatrix.txt")
 
 # imgnet_all_bm = read.big.matrix( "Data/imagenet_all_m_bigmatrix.txt") # didn't work well
- 
+
 # Use absolute path (again didn't work)
 # imgnet_all_bm = read.big.matrix( normalizePath("Data/imagenet_all_m_bigmatrix.txt"), type="double", header=TRUE)
 
@@ -103,19 +105,27 @@ colnames(imgnet_all_m3) = rownames(imgnet_all_m3) = imgnet_occurred_lemmas
 
 summary(diag(imgnet_all_m3))
 
-saveRDS(imgnet_all_m2, file = "Data/imagenet_all_reduced_m2.rds")
+saveRDS(imgnet_all_m2, file = paste0(path_out_network,"/imagenet_all_reduced_m2.rds"))
 
-saveRDS(imgnet_all_m3, file = "Data/imagenet_all_reduced_m3.rds")
+saveRDS(imgnet_all_m3, file = paste0(path_out_network,"/imagenet_all_reduced_m3.rds"))
 
 tags_l = list(places_all_m, imgnet_all_m3)#, joint_all_m)
 dt_names = c("Places365", "IMAGENET")#, "Hybrid")
 
+# Walk-trap steps
+N_STEPS = as.integer(c(365/10, 2.1E3 / 10 ))
 
-idx = 2 
+
+
+idx = 1
+
+
 
 
 
 for (idx in seq_along(dt_names)) { 
+    
+    N_STEP = N_STEPS[idx]
     
     tags_dt = tags_l[[idx]]
     dt_name = dt_names[[idx]]
@@ -131,6 +141,8 @@ for (idx in seq_along(dt_names)) {
     
     
     
+    
+    
     # 2. Create weighted graph 
     fl_graph <- graph.adjacency(tags_m,
                                 weighted=TRUE,
@@ -140,22 +152,35 @@ for (idx in seq_along(dt_names)) {
     
     
     # Cluster
-    cw <-  cluster_walktrap(fl_graph, steps=20, membership = T, weights = E(fl_graph)$weight)  # step: the length of the random walks to perform. 
+    cw <-  cluster_walktrap(fl_graph, steps=N_STEP, membership = T, weights = E(fl_graph)$weight)  # step: the length of the random walks to perform. 
+    pdf(paste0(paste0(path_out_network, "/",dt_name, "_Modularity.pdf")), width=30, height = 20)
     
-    plot(sapply(10:500, FUN = function(x)  modularity(fl_graph,  cut_at(cw, no = x))), type="o", xlab= "K", ylab= "Modularity", main = paste0("Modularity changing with K (Walktrap) for ", dt_name))
+    mod_v = sapply(1:300, FUN = function(x)  modularity(fl_graph,  cut_at(cw, no = x)))
+    
+    plot(mod_v, type="o", xlab= "K", ylab= "Modularity", main = paste0("Modularity changing with K (Walktrap) for ", dt_name))
     # sapply(1:50, FUN = function(x)  modularity(fl_graph,  cut_at(cw, no = x)))
+    dev.off()
+    
+    which.max(mod_v)
+    
+    write.xlsx(data.frame(K = 1:300, Modularity =mod_v), file = paste0(path_out_network, "/cw_modularity_", dt_name, ".xlsx"))
     
     # plot(fl_graph)
     
     # Fuzzy clustering
     
+    # One of the main drawbacks of fuzzy clustering algorithms is their sensitivity to the choice of parameters, particularly the fuzziness parameter. In fuzzy clustering, each data point can belong to multiple clusters with different degrees of membership. The degree of membership is controlled by the fuzziness parameter (typically denoted by "m" in algorithms like Fuzzy C-Means).
+    # Fuzzy clustering may be more sensitive to noise in the data.
+    # Fuzzy 클러스터링이 더 좋지는 않다
     
     
-    pdf(paste0("Data/",dt_name, "_dendrogram_reduced.pdf"), width=30, height = 20)
+    
+    
+    pdf(paste0(paste0(path_out_network, "/",dt_name, "_dendrogram_reduced.pdf")), width=30, height = 20)
     # igraph::plot_dendrogram(cw, cex=0.2, mode = "phylo") # requires 'ape'
     igraph::plot_dendrogram(cw, cex=0.2, mode = "hclust")
     # igraph::plot_dendrogram(cw, cex=0.3, mode = "dendrogram")
-     
+    
     dev.off()
     
     
@@ -163,30 +188,39 @@ for (idx in seq_along(dt_names)) {
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K5", value = cut_at(cw, no = 5))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K7", value = cut_at(cw, no = 7))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K9", value = cut_at(cw, no = 9))
-      for(k in 11:30) { 
+    
+    for(k in 11:30) { 
         fl_graph <- set_vertex_attr(fl_graph, paste0("cluster_K", k), value = cut_at(cw, no = k))
         
     }
+    
+    opt_k = which.max(mod_v)
+    
+    
+    fl_graph <- set_vertex_attr(fl_graph, paste0("cluster_K", opt_k, "opt"), value = cut_at(cw, no = opt_k))
+    
+    
+    
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K50", value = cut_at(cw, no = 50))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K60", value = cut_at(cw, no = 60))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K100", value = cut_at(cw, no = 100))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K107", value = cut_at(cw, no = 107))
     fl_graph <- set_vertex_attr(fl_graph, "cluster_K200", value = cut_at(cw, no = 200))
-    fl_graph <- set_vertex_attr(fl_graph, "cluster_K300", value = cut_at(cw, no = 300))
-    fl_graph <- set_vertex_attr(fl_graph, "cluster_K400", value = cut_at(cw, no = 400))
-    fl_graph <- set_vertex_attr(fl_graph, "cluster_K500", value = cut_at(cw, no = 500))
-    
-    fl_graph <- set_vertex_attr(fl_graph, "cluster_K5000", value = cut_at(cw, no = 5000))
+    # fl_graph <- set_vertex_attr(fl_graph, "cluster_K300", value = cut_at(cw, no = 300))
+    # fl_graph <- set_vertex_attr(fl_graph, "cluster_K400", value = cut_at(cw, no = 400))
+    # fl_graph <- set_vertex_attr(fl_graph, "cluster_K500", value = cut_at(cw, no = 500))
+    # 
+    # fl_graph <- set_vertex_attr(fl_graph, "cluster_K5000", value = cut_at(cw, no = 5000))
     # fl_graph <- set_vertex_attr(fl_graph, "cluster_K10000", value = cut_at(cw, no = 10000))
     
     # write.graph(fl_graph, file = "cw5.dl", format = "pajek")
     
     # g1.gexf <- igraph.to.gexf(fl_graph)
-    write.graph(fl_graph, file = paste0("Data/cw_", dt_name, "_gte5_reduced.gml"), format = "gml")
+    write.graph(fl_graph, file = paste0(path_out_network, "/cw_", dt_name, "_reduced.gml"), format = "gml")
     
-    saveRDS(cw, "Data/cw_gte5_reduced.Rds")
+    saveRDS(cw, paste0(path_out_network, "/cw_", dt_name, "_reduced.Rds"))
     
-    k_v = 10:1000
+    k_v = 1:200
     cluster_df = sapply(k_v, FUN = function(x) cut_at(cw, no = x))
     
     rownames(cluster_df) = tags_v
@@ -198,16 +232,14 @@ for (idx in seq_along(dt_names)) {
     
     plot(sapply(1:length(k_v), FUN = function(x) max(table(cluster_df[,x]))), type="l", ylab="Max. freq. of a single cluster", xlab="Number of Clusters")
     
-     
-    cls_tmp = data.frame(Tag = tags_v, Cluster_K108 = cluster_df[,99])
+    
+    cls_tmp = data.frame(Tag = tags_v,  cluster_df[,])
     rownames(cls_tmp) = tags_v
     
     
-    write.xlsx(cls_tmp, file = paste0("Data/ClusterInfo_", dt_name, "_gte5.xlsx"))
+    write.xlsx(cls_tmp, file = paste0(path_out_network, "/ClusterInfo_", dt_name, ".xlsx"))
     
     
-    table(cluster_df[,89]) # optimal cluster num
-    table(cluster_df[,99]) # my pick.. smaller imbalance
     
     # write.xlsx(tags_m, file = paste0("Data/CooccurenceMatrix_", dt_name, ".xlsx"))
     
